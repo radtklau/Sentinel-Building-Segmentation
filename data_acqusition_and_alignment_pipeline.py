@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pickle
+import ast
+import sys
 
 def get_osm_city_building_data(city_name):
     osm_data_dir_name = "city_osm_data"
@@ -21,11 +23,45 @@ def get_osm_city_building_data(city_name):
 
     osm = OSM(fp)
     print("Extracting city boundaries...")
-    boundaries = osm.get_boundaries()
-    boundaries_city = boundaries[boundaries['name']==city_name]
-    #boundary_coords = np.array(boundaries_city["geometry"].iloc[0].exterior.coords)
+    boundaries_city = osm.get_boundaries(name=city_name)
 
-    osm_buildings = OSM(fp, bounding_box=boundaries_city['geometry'].values[0])
+    #boundaries_city contains all bounds that contain the city name
+    #assume that bound with city tag is actual city bound, if no city
+    #tag exists, assume that bound wiht biggest area is the actual city bound
+    ind_city_status = -1
+    city_tag_encountered = 0
+    ind_biggest_area = 0
+    max_area = 0
+    for index,row in boundaries_city.iterrows():
+        try:
+            tags = row["tags"]
+            if isinstance(tags, str):
+                tags = ast.literal_eval(tags)
+            status = tags["de:place"]
+            if status == "city":
+                city_tag_encountered += 1
+                ind_city_status = index
+            else:
+                continue #if status != city, we dont want to consider the size of the area
+        except: #no place tag, consider size of area
+            continue
+
+        area_in_bound = row["geometry"].area
+        if area_in_bound > max_area:
+            max_area = area_in_bound
+            ind_biggest_area = index
+
+
+    if city_tag_encountered == 1:
+        city_bound = boundaries_city.iloc[ind_city_status]
+    else:
+        if ind_biggest_area == 0:
+            print("Error: No city bound found")
+            sys.exit()
+        city_bound = boundaries_city.iloc[ind_biggest_area]
+
+    print(city_bound["name"])
+    osm_buildings = OSM(fp, bounding_box=city_bound["geometry"])
     print("Extracting buildings in city boundary...")
     buildings_in_city_bounds = osm_buildings.get_buildings()
 
@@ -46,7 +82,22 @@ def get_osm_city_building_data(city_name):
     with open(building_data_fp, 'wb') as f:
         pickle.dump(building_geometry, f)
 
-get_osm_city_building_data("Jena")
+def plot_city_building_data(city_name):
+    fp = f"building_and_sentinel_data/{city_name}/{city_name}_buildings.pkl"
+    print("Plotting building data...")
+
+    building_geometry = None
+    try:
+        with open(fp, 'rb') as f:
+            building_geometry = pickle.load(f)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    fig, ax = plt.subplots()
+    building_geometry.plot(ax=ax)
+    ax.set_aspect('equal')
+
+    plt.show()
 
 def plot_city_boundary_extremes(boundary_coords):
 
@@ -81,5 +132,14 @@ def plot_city_boundary_extremes(boundary_coords):
 
     # Display the plot
     plt.show()
+
+def get_sentinel_city_data():
+    pass
+
+city_name = "Potsdam"
+get_osm_city_building_data(city_name)
+plot_city_building_data(city_name)
+
+
 
 
