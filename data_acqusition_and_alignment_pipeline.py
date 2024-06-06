@@ -155,14 +155,13 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
 
     print("Extracting city coordinates...")
     global city_boundary
-    boundary_coords = np.array(city_boundary["geometry"].exterior.coords)
+    min_longitude_point = city_boundary["geometry"].bounds[0]
+    min_latitude_point = city_boundary["geometry"].bounds[1]
+    max_longitude_point = city_boundary["geometry"].bounds[2]
+    max_latitude_point = city_boundary["geometry"].bounds[3]
 
-    max_longitude_point, min_longitude_point, max_latitude_point, \
-        min_latitude_point = find_extreme_coords(boundary_coords)
-    
-    #TODO adjust to be more general for southern hemisphere and west of greenwich too
-    spatial_extent = {"west":min_longitude_point[0], "south":min_latitude_point[1], \
-                      "east":max_longitude_point[0], "north":max_latitude_point[1]} 
+    spatial_extent = {"west":min_longitude_point, "south":min_latitude_point, \
+                      "east":max_longitude_point, "north":max_latitude_point} 
     
     datacube = connection.load_collection("SENTINEL2_L2A", \
             spatial_extent=spatial_extent, \
@@ -203,16 +202,20 @@ def a_1_pipeline(city_name):
     global city_boundary
 
     get_osm_building_data(city_name)
-    plot_building_data(city_name)
+    #plot_building_data(city_name)
 
     #spatial_extent={"west": 13.10, "south": 52.35, "east": 13.66, "north": 52.64} (berlin)
-    temporal_extent=["2024-05-01", "2024-05-02"]
+    temporal_extent=["2024-03-05", "2024-03-06"]
     bands=["B04", "B03", "B02"]
 
     get_sentinel_image_data(temporal_extent, bands, city_name)
 
-city_name = "Wien"
+city_name = "Paris"
 a_1_pipeline(city_name)
+
+#TODO download of infrared band,
+#plotting pipelines for the report of single bands (Figure 2a), buildings (Figure 1a), RGB (Figure
+#1b), IRB (Infrared, Red, and Blue) (Figure 2c), and overlapping buildings (Figure 2b)
 
 
 
