@@ -51,7 +51,6 @@ def get_osm_city_building_data(city_name):
             max_area = area_in_bound
             ind_biggest_area = index
 
-
     if city_tag_encountered == 1:
         city_bound = boundaries_city.iloc[ind_city_status]
     else:
@@ -60,7 +59,7 @@ def get_osm_city_building_data(city_name):
             sys.exit()
         city_bound = boundaries_city.iloc[ind_biggest_area]
 
-    print(city_bound["name"])
+    #print(city_bound["name"])
     osm_buildings = OSM(fp, bounding_box=city_bound["geometry"])
     print("Extracting buildings in city boundary...")
     buildings_in_city_bounds = osm_buildings.get_buildings()
@@ -95,7 +94,7 @@ def plot_city_building_data(city_name):
 
     fig, ax = plt.subplots()
     building_geometry.plot(ax=ax)
-    ax.set_aspect('equal')
+    #ax.set_aspect('equal')
 
     plt.show()
 
@@ -136,7 +135,7 @@ def plot_city_boundary_extremes(boundary_coords):
 def get_sentinel_city_data():
     pass
 
-city_name = "Potsdam"
+city_name = "Hamm"
 get_osm_city_building_data(city_name)
 plot_city_building_data(city_name)
 
