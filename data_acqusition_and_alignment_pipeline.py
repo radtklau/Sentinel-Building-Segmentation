@@ -110,6 +110,11 @@ def plot_building_data(city_name):
 
     plt.show()
 
+def plot_data(city_name, type): #plot relevant data
+    if type not in ["rgb", "irb", "buildings", "rgb_buildings"]:
+        pass
+    pass
+
 def plot_city_boundary_extremes(boundary_coords):
     max_longitude_point, min_longitude_point, max_latitude_point, \
     min_latitude_point = find_extreme_coords(boundary_coords)
@@ -181,6 +186,11 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     clipped_image *= 255
 
     rgb_im = np.stack([clipped_image[0], clipped_image[1], clipped_image[2]], axis=-1)
+    irb_im = np.stack([clipped_image[0], clipped_image[1], clipped_image[3]], axis=-1)
+    r_im = clipped_image[0]
+    g_im = clipped_image[1]
+    b_im = clipped_image[2]
+    vnir_im = clipped_image[3]
 
     rgb_im = rgb_im.astype(np.uint8)
 
@@ -194,8 +204,19 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     if not os.path.exists(building_and_sentinel_city_data_dir_name):
         os.makedirs(building_and_sentinel_city_data_dir_name)
     
-    satellite_data_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_rgb.png")
-    imageio.imwrite(satellite_data_fp, rgb_im)
+    satellite_data_rgb_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_rgb.png")
+    satellite_data_r_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_r.png")
+    satellite_data_g_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_g.png")
+    satellite_data_b_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_b.png")
+    satellite_data_irb_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_irb.png")
+    satellite_data_vnir_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_vnir.png")
+
+    plt.imsave(satellite_data_rgb_fp, rgb_im)
+    plt.imsave(satellite_data_r_fp, r_im, cmap='gray')
+    plt.imsave(satellite_data_g_fp, g_im, cmap='gray')
+    plt.imsave(satellite_data_b_fp, rgb_im, cmap='gray')
+    plt.imsave(satellite_data_irb_fp, b_im)
+    plt.imsave(satellite_data_vnir_fp, vnir_im, cmap='gray')
 
 
 def a_1_pipeline(city_name):
@@ -205,12 +226,12 @@ def a_1_pipeline(city_name):
     #plot_building_data(city_name)
 
     #spatial_extent={"west": 13.10, "south": 52.35, "east": 13.66, "north": 52.64} (berlin)
-    temporal_extent=["2024-03-05", "2024-03-06"]
+    temporal_extent=["2024-05-13", "2024-05-14"]
     bands=["B04", "B03", "B02"]
 
     get_sentinel_image_data(temporal_extent, bands, city_name)
 
-city_name = "Paris"
+city_name = "Hamm"
 a_1_pipeline(city_name)
 
 #TODO download of infrared band,
