@@ -186,13 +186,18 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     clipped_image *= 255
 
     rgb_im = np.stack([clipped_image[0], clipped_image[1], clipped_image[2]], axis=-1)
-    irb_im = np.stack([clipped_image[0], clipped_image[1], clipped_image[3]], axis=-1)
+    irb_im = np.stack([clipped_image[3], clipped_image[0], clipped_image[1]], axis=-1)
     r_im = clipped_image[0]
     g_im = clipped_image[1]
     b_im = clipped_image[2]
     vnir_im = clipped_image[3]
 
     rgb_im = rgb_im.astype(np.uint8)
+    irb_im = irb_im.astype(np.uint8)
+    r_im = r_im.astype(np.uint8)
+    g_im = g_im.astype(np.uint8)
+    b_im = b_im.astype(np.uint8)
+    vnir_im = vnir_im.astype(np.uint8)
 
     print("Writing to disk...")
     building_and_sentinel_data_dir_name = "building_and_sentinel_data"
@@ -214,8 +219,8 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     plt.imsave(satellite_data_rgb_fp, rgb_im)
     plt.imsave(satellite_data_r_fp, r_im, cmap='gray')
     plt.imsave(satellite_data_g_fp, g_im, cmap='gray')
-    plt.imsave(satellite_data_b_fp, rgb_im, cmap='gray')
-    plt.imsave(satellite_data_irb_fp, b_im)
+    plt.imsave(satellite_data_b_fp, b_im, cmap='gray')
+    plt.imsave(satellite_data_irb_fp, irb_im)
     plt.imsave(satellite_data_vnir_fp, vnir_im, cmap='gray')
 
 
@@ -227,7 +232,7 @@ def a_1_pipeline(city_name):
 
     #spatial_extent={"west": 13.10, "south": 52.35, "east": 13.66, "north": 52.64} (berlin)
     temporal_extent=["2024-05-13", "2024-05-14"]
-    bands=["B04", "B03", "B02"]
+    bands=["B04", "B03", "B02", "B08"]
 
     get_sentinel_image_data(temporal_extent, bands, city_name)
 
