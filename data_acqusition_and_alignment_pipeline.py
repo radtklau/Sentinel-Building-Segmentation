@@ -4,6 +4,7 @@ from tqdm import tqdm
 from pyrosm import OSM
 import geopandas
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 import numpy as np
 import os
 import pickle
@@ -11,6 +12,9 @@ import ast
 import sys
 import openeo
 import imageio
+from PIL import Image
+from pyproj import Transformer
+import math
 
 def get_osm_building_data(city_name):
     if city_name not in sources.cities.available:
@@ -33,7 +37,7 @@ def get_osm_building_data(city_name):
     #print(city_boundary["name"])
     osm_buildings = OSM(fp, bounding_box=city_boundary["geometry"])
     print("Extracting buildings in city boundary...")
-    buildings_in_city_boundaries = osm_buildings.get_buildings()
+    buildings_in_city_boundaries = osm_buildings.get_buildings() #EPGS:4326
 
     building_geometry = buildings_in_city_boundaries["geometry"]
 
@@ -93,66 +97,83 @@ def get_city_boundary(fp, city_name):
 
     return city_boundary
 
-def plot_building_data(city_name):
-    fp = f"building_and_sentinel_data/{city_name}/{city_name}_buildings.pkl"
-    print("Plotting building data...")
 
+def plot_data(city_name, type): #plot relevant data
+    if type not in ["rgb", "irb", "buildings", "rgb_buildings", "r", "g", "b"]:
+        print("Not a valid type.")
+        return
+    
+    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
+
+    if type == "buildings":
+        path_to_building_data = os.path.join(path_to_city_data, f"{city_name}_buildings.pkl")
+        building_geometry = None
+        try:
+            with open(path_to_building_data, 'rb') as f:
+                building_geometry = pickle.load(f)
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+        _, ax = plt.subplots()
+        building_geometry.plot(ax=ax)
+        plt.show()
+    else:
+        path_to_image = os.path.join(path_to_city_data, f"{city_name}_{type}.png")
+        image = mpimg.imread(path_to_image)
+        plt.imshow(image)
+        plt.axis('off')
+        plt.show()
+
+
+def buildings_pkl_to_png(city_name):
+    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
+    path_to_building_pkl = os.path.join(path_to_city_data, f"{city_name}_buildings.pkl")
+    path_to_building_png = os.path.join(path_to_city_data, f"{city_name}_buildings.png")
     building_geometry = None
     try:
-        with open(fp, 'rb') as f:
+        with open(path_to_building_pkl, 'rb') as f:
             building_geometry = pickle.load(f)
     except Exception as e:
         print(f"An error occurred: {e}")
 
     fig, ax = plt.subplots()
-    building_geometry.plot(ax=ax)
-    #ax.set_aspect('equal')
 
-    plt.show()
+    # Set the figure background to transparent
+    #fig.patch.set_alpha(0.0)
 
-def plot_data(city_name, type): #plot relevant data
-    if type not in ["rgb", "irb", "buildings", "rgb_buildings"]:
-        pass
-    pass
+    # Plot the building geometry
+    if building_geometry is not None:
+        building_geometry.plot(ax=ax)
 
-def plot_city_boundary_extremes(boundary_coords):
-    max_longitude_point, min_longitude_point, max_latitude_point, \
-    min_latitude_point = find_extreme_coords(boundary_coords)
+    # Set the axes background to transparent
+    #ax.patch.set_alpha(0.0)
 
-    plt.scatter(boundary_coords[:, 0], boundary_coords[:, 1], label='All Points', color='blue')
+    #ax.axis('off')
 
-    # Highlight the points with the highest and lowest longitude and latitude in red
-    plt.scatter(max_longitude_point[0], max_longitude_point[1], color='red', label='Max Longitude')
-    plt.scatter(min_longitude_point[0], min_longitude_point[1], color='red', label='Min Longitude')
-    plt.scatter(max_latitude_point[0], max_latitude_point[1], color='red', label='Max Latitude')
-    plt.scatter(min_latitude_point[0], min_latitude_point[1], color='red', label='Min Latitude')
+    # Save the plot as PNG with transparent background
+    plt.savefig(path_to_building_png, transparent=True)
+    plt.close(fig)
 
-    # Add labels and title for better understanding
-    plt.xlabel('Longitude')
-    plt.ylabel('Latitude')
-    plt.title('Scatter Plot of Coordinates with Extremes Highlighted')
-    plt.legend()
+def build_stacked_im(city_name): #TODO
+    buildings_pkl_to_png(city_name)
+    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
+    path_to_rgb_image = os.path.join(path_to_city_data, f"{city_name}_rgb.png")
+    rgb_im = Image.open(path_to_rgb_image)
 
-    # Display the plot
-    plt.show()
+    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
+    path_to_building_data = os.path.join(path_to_city_data, f"{city_name}_buildings.png")
+    building_im = Image.open(path_to_building_data)
 
-def find_extreme_coords(boundary_coords):
-    max_longitude_index = np.argmax(boundary_coords[:, 0])
-    max_longitude_point = boundary_coords[max_longitude_index]
+    if rgb_im.size != building_im.size:
+        print(rgb_im.size)
+        print(building_im.size)
+        print("ohhhhhhhhhhhhhhh")
+        building_im = building_im.resize(rgb_im.size)
 
-    # Find the point with the lowest longitude
-    min_longitude_index = np.argmin(boundary_coords[:, 0])
-    min_longitude_point = boundary_coords[min_longitude_index]
+    stacked_im = Image.alpha_composite(rgb_im.convert('RGBA'), building_im)
 
-    # Find the point with the highest latitude
-    max_latitude_index = np.argmax(boundary_coords[:, 1])
-    max_latitude_point = boundary_coords[max_latitude_index]
-
-    # Find the point with the lowest latitude
-    min_latitude_index = np.argmin(boundary_coords[:, 1])
-    min_latitude_point = boundary_coords[min_latitude_index]
-
-    return max_longitude_point, min_longitude_point, max_latitude_point, min_latitude_point
+    path_to_stacked_im = os.path.join(path_to_city_data, f"{city_name}_rgb_buildings.png")
+    stacked_im.save(path_to_stacked_im)
 
 def get_sentinel_image_data(temporal_extent, bands, city_name):
     print("Connecting to backend...")
@@ -199,6 +220,13 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     b_im = b_im.astype(np.uint8)
     vnir_im = vnir_im.astype(np.uint8)
 
+    global im_size
+    im_size = rgb_im.shape
+
+    print("Building stacked image...")
+    #build_stacked_im(city_name)
+    buildings_rgb_stacked_im = 0 #TODO
+
     print("Writing to disk...")
     building_and_sentinel_data_dir_name = "building_and_sentinel_data"
     if not os.path.exists(building_and_sentinel_data_dir_name):
@@ -223,9 +251,78 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     plt.imsave(satellite_data_irb_fp, irb_im)
     plt.imsave(satellite_data_vnir_fp, vnir_im, cmap='gray')
 
+def geo_reprojection(city_name):
+    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
+    path_to_building_data = os.path.join(path_to_city_data, f"{city_name}_buildings.pkl")
+    building_geometry = None
+    try:
+        with open(path_to_building_data, 'rb') as f:
+            building_geometry = pickle.load(f)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    
+    max_lon = building_geometry.total_bounds[2]
+    min_lon = building_geometry.total_bounds[0]
+    half_lon = (max_lon - min_lon) / 2 + min_lon
+
+    max_lat = building_geometry.total_bounds[3]
+    min_lat = building_geometry.total_bounds[1]
+    half_lat = (max_lat - min_lat) / 2 + min_lat
+    
+    utm_zone = math.floor((half_lon + 180) / 6) + 1
+
+    if half_lat > 0:
+        utm_crs = f'EPSG:326{utm_zone}'
+    else:
+        utm_crs = f'EPSG:327{utm_zone}'
+
+    geographic_crs = 'EPSG:4326'
+    #utm_crs = 'EPSG:1078'
+
+    # Create a transformer object for the conversion
+    transformer = Transformer.from_crs(geographic_crs, utm_crs, always_xy=True)
+
+    utm_coords = []
+
+    for building in building_geometry.values.data:
+        building_coords = np.array(building.exterior.coords)
+
+        for coords in building_coords:
+            utm_x, utm_y = transformer.transform(coords[0], coords[1])
+            utm_coord = [utm_x, utm_y]
+            utm_coords.append(utm_coord)
+
+    utm_coords = np.array(utm_coords)
+    max_x_val = np.max(utm_coords[:,0])
+    max_y_val = np.max(utm_coords[:,1])
+
+    utm_coords_norm = np.zeros_like(utm_coords)
+    global im_size
+    utm_coords_norm[:,0] = (utm_coords[:,0] / max_x_val) * (im_size[1]-1)
+    utm_coords_norm[:,1] = (utm_coords[:,1] / max_y_val) * (im_size[0]-1)
+
+    labels = np.zeros(im_size, dtype=np.uint8)
+
+    for coord in utm_coords_norm:
+        x, y = np.floor(coord).astype(int)
+        labels[y, x] = 1
+
+    print(type(labels))
+
+    plt.imshow(labels, cmap='Greys')
+    plt.colorbar(label='Value')
+    plt.title('2D Array Plot')
+    plt.xlabel('X-axis')
+    plt.ylabel('Y-axis')
+    plt.show()
+
+
+
+
 
 def a_1_pipeline(city_name):
     global city_boundary
+    global im_size
 
     get_osm_building_data(city_name)
     #plot_building_data(city_name)
@@ -235,13 +332,15 @@ def a_1_pipeline(city_name):
     bands=["B04", "B03", "B02", "B08"]
 
     get_sentinel_image_data(temporal_extent, bands, city_name)
+    geo_reprojection(city_name)
 
 city_name = "Hamm"
 a_1_pipeline(city_name)
+#build_stacked_im("Hamm")
+#plot_data("Hamm", "buildings")
 
-#TODO download of infrared band,
-#plotting pipelines for the report of single bands (Figure 2a), buildings (Figure 1a), RGB (Figure
-#1b), IRB (Infrared, Red, and Blue) (Figure 2c), and overlapping buildings (Figure 2b)
 
+
+#TODO take OSM polygons and project into sentinel data projection
 
 
