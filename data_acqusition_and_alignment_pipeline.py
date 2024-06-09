@@ -15,6 +15,8 @@ import imageio
 from PIL import Image
 from pyproj import Transformer
 import math
+from shapely.geometry import Polygon
+import rasterio.features
 
 def get_osm_building_data(city_name):
     if city_name not in sources.cities.available:
@@ -220,8 +222,9 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     b_im = b_im.astype(np.uint8)
     vnir_im = vnir_im.astype(np.uint8)
 
-    global im_size
-    im_size = rgb_im.shape
+    global im_shape
+    im_shape = r_im.shape
+    print(im_shape)
 
     print("Building stacked image...")
     #build_stacked_im(city_name)
@@ -251,7 +254,7 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     plt.imsave(satellite_data_irb_fp, irb_im)
     plt.imsave(satellite_data_vnir_fp, vnir_im, cmap='gray')
 
-def geo_reprojection(city_name):
+def geo_coord_reprojection(city_name, polygon=True, im_corners=None):
     path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
     path_to_building_data = os.path.join(path_to_city_data, f"{city_name}_buildings.pkl")
     building_geometry = None
@@ -282,47 +285,72 @@ def geo_reprojection(city_name):
     # Create a transformer object for the conversion
     transformer = Transformer.from_crs(geographic_crs, utm_crs, always_xy=True)
 
-    utm_coords = []
+    if polygon:
+        utm_coords = []
 
-    for building in building_geometry.values.data:
-        building_coords = np.array(building.exterior.coords)
+        for polygon in building_geometry.values.data:
+            building_coords = np.array(polygon.exterior.coords)
+            polygon_utm_coords = []
+            for coords in building_coords:
+                utm_x, utm_y = transformer.transform(coords[0], coords[1])
+                utm_coord = [utm_x, utm_y]
+                polygon_utm_coords.append(utm_coord)
 
-        for coords in building_coords:
-            utm_x, utm_y = transformer.transform(coords[0], coords[1])
-            utm_coord = [utm_x, utm_y]
-            utm_coords.append(utm_coord)
+            utm_coords.append(polygon_utm_coords)
 
-    utm_coords = np.array(utm_coords)
-    max_x_val = np.max(utm_coords[:,0])
-    max_y_val = np.max(utm_coords[:,1])
+        return utm_coords
+    
+    else:
+        utm_min_x, utm_min_y = transformer.transform(im_corners[0], im_corners[1])
+        utm_max_x, utm_max_y = transformer.transform(im_corners[2], im_corners[3])
+        return [utm_min_x, utm_min_y, utm_max_x, utm_max_y]
 
-    utm_coords_norm = np.zeros_like(utm_coords)
-    global im_size
-    utm_coords_norm[:,0] = (utm_coords[:,0] / max_x_val) * (im_size[1]-1)
-    utm_coords_norm[:,1] = (utm_coords[:,1] / max_y_val) * (im_size[0]-1)
+def label_gen(city_name):
+    #label_im = np.zeros(im_shape)
+    utm_polygons = geo_coord_reprojection(city_name)
 
-    labels = np.zeros(im_size, dtype=np.uint8)
+    global city_boundary
+    min_longitude_point = city_boundary["geometry"].bounds[0]
+    min_latitude_point = city_boundary["geometry"].bounds[1]
+    max_longitude_point = city_boundary["geometry"].bounds[2]
+    max_latitude_point = city_boundary["geometry"].bounds[3]
 
-    for coord in utm_coords_norm:
-        x, y = np.floor(coord).astype(int)
-        labels[y, x] = 1
+    im_corners = [min_longitude_point, min_latitude_point, max_longitude_point, max_latitude_point]
+    utm_im_corners = geo_coord_reprojection(city_name, polygon=False, im_corners=im_corners)
+    print("x")
+    pixel_resolution = 10
 
-    print(type(labels))
+    pixel_polygons = []
+    for utm_polygon in utm_polygons:
+        pixel_polygon = []
+        for utm_coord in utm_polygon:
+            x_coord = utm_coord[0]
+            y_coord = utm_coord[1]
+            x_dist_im_corner = x_coord - utm_im_corners[0]
+            y_dist_im_corner = y_coord - utm_im_corners[1]
 
-    plt.imshow(labels, cmap='Greys')
-    plt.colorbar(label='Value')
-    plt.title('2D Array Plot')
-    plt.xlabel('X-axis')
-    plt.ylabel('Y-axis')
+            x_pixel_coord = math.floor(x_dist_im_corner / pixel_resolution)
+            y_pixel_coord = math.floor(y_dist_im_corner / pixel_resolution)
+            #label_im[y_pixel_coord, x_pixel_coord] = 1
+
+            pixel_coord = (y_pixel_coord, x_pixel_coord)
+            pixel_polygon.append(pixel_coord)
+
+        pixel_polygons.append(Polygon(pixel_polygon))
+    
+    label_im = rasterio.features.rasterize(pixel_polygons, out_shape=im_shape)
+
+    plt.imshow(label_im, cmap='gray', interpolation='nearest')
+    #plt.axis('off')
+    plt.imsave("test.png", label_im, cmap='gray')
     plt.show()
-
 
 
 
 
 def a_1_pipeline(city_name):
     global city_boundary
-    global im_size
+    global im_shape
 
     get_osm_building_data(city_name)
     #plot_building_data(city_name)
@@ -332,7 +360,7 @@ def a_1_pipeline(city_name):
     bands=["B04", "B03", "B02", "B08"]
 
     get_sentinel_image_data(temporal_extent, bands, city_name)
-    geo_reprojection(city_name)
+    label_gen(city_name)
 
 city_name = "Hamm"
 a_1_pipeline(city_name)
