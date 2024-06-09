@@ -155,27 +155,7 @@ def buildings_pkl_to_png(city_name):
     # Save the plot as PNG with transparent background
     plt.savefig(path_to_building_png, transparent=True)
     plt.close(fig)
-
-def build_stacked_im(city_name): #TODO
-    buildings_pkl_to_png(city_name)
-    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
-    path_to_rgb_image = os.path.join(path_to_city_data, f"{city_name}_rgb.png")
-    rgb_im = Image.open(path_to_rgb_image)
-
-    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
-    path_to_building_data = os.path.join(path_to_city_data, f"{city_name}_buildings.png")
-    building_im = Image.open(path_to_building_data)
-
-    if rgb_im.size != building_im.size:
-        print(rgb_im.size)
-        print(building_im.size)
-        print("ohhhhhhhhhhhhhhh")
-        building_im = building_im.resize(rgb_im.size)
-
-    stacked_im = Image.alpha_composite(rgb_im.convert('RGBA'), building_im)
-
-    path_to_stacked_im = os.path.join(path_to_city_data, f"{city_name}_rgb_buildings.png")
-    stacked_im.save(path_to_stacked_im)
+    
 
 def get_sentinel_image_data(temporal_extent, bands, city_name):
     print("Connecting to backend...")
@@ -304,10 +284,28 @@ def geo_coord_reprojection(city_name, polygon=True, im_corners=None):
         utm_min_x, utm_min_y = transformer.transform(im_corners[0], im_corners[1])
         utm_max_x, utm_max_y = transformer.transform(im_corners[2], im_corners[3])
         return [utm_min_x, utm_min_y, utm_max_x, utm_max_y]
+    
+def build_stacked_im(city_name, label_im):
+    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
+    path_to_rgb_image = os.path.join(path_to_city_data, f"{city_name}_rgb.png")
+    rgb_im = Image.open(path_to_rgb_image).convert('RGB')  # Convert to RGB to remove the alpha channel
+    rgb_im = np.array(rgb_im)
+
+    # Create a mask for the white pixels in the BW image
+    mask = label_im == 1
+
+    # Prepare an output image
+    stacked_im = np.copy(rgb_im)
+
+    # Set the white pixels in the BW image to white in the RGB image
+    stacked_im[mask] = [0, 0, 255]
+
+    path_to_stacked_image = os.path.join(path_to_city_data, f"{city_name}_stacked.png")
+    plt.imsave(path_to_stacked_image, stacked_im)
 
 def label_gen(city_name):
     #label_im = np.zeros(im_shape)
-    utm_polygons = geo_coord_reprojection(city_name)
+    utm_polygons = geo_coord_reprojection(city_name) #utm_polygon_coords
 
     global city_boundary
     min_longitude_point = city_boundary["geometry"].bounds[0]
@@ -333,19 +331,20 @@ def label_gen(city_name):
             y_pixel_coord = math.floor(y_dist_im_corner / pixel_resolution)
             #label_im[y_pixel_coord, x_pixel_coord] = 1
 
-            pixel_coord = (y_pixel_coord, x_pixel_coord)
+            y_pixel_coord = im_shape[0] - y_pixel_coord #index rows from top not bottom 
+
+            pixel_coord = (x_pixel_coord, y_pixel_coord)
             pixel_polygon.append(pixel_coord)
 
         pixel_polygons.append(Polygon(pixel_polygon))
     
     label_im = rasterio.features.rasterize(pixel_polygons, out_shape=im_shape)
 
-    plt.imshow(label_im, cmap='gray', interpolation='nearest')
-    #plt.axis('off')
-    plt.imsave("test.png", label_im, cmap='gray')
-    plt.show()
+    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
+    path_to_building_png = os.path.join(path_to_city_data, f"{city_name}_buildings.png")
+    plt.imsave(path_to_building_png, label_im, cmap='gray')
 
-
+    build_stacked_im(city_name, label_im)
 
 
 def a_1_pipeline(city_name):
@@ -364,11 +363,7 @@ def a_1_pipeline(city_name):
 
 city_name = "Hamm"
 a_1_pipeline(city_name)
-#build_stacked_im("Hamm")
 #plot_data("Hamm", "buildings")
 
-
-
-#TODO take OSM polygons and project into sentinel data projection
 
 
