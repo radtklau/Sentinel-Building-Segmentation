@@ -316,15 +316,6 @@ def build_stacked_im(city_name, label_im):
     rgb_im = Image.open(path_to_rgb_image).convert('RGB')  # Convert to RGB to remove the alpha channel
     rgb_im = np.array(rgb_im)
 
-    rgb_im = rgb_im / np.max(rgb_im)
-
-    rgba_image = np.zeros((rgb_im.shape[0], rgb_im.shape[1], 4))
-    rgba_image[:, :, :3] = rgb_im
-
-    # Set the alpha channel based on the binary image
-    rgba_image[:, :, 3] = label_im
-    plt.show()
-    """
     # Create a mask for the white pixels in the BW image
     mask = label_im == 1
 
@@ -333,13 +324,13 @@ def build_stacked_im(city_name, label_im):
 
     # Set the white pixels in the BW image to white in the RGB image
     stacked_im[mask] = [0, 0, 255]
-    """
+
     path_to_stacked_image = os.path.join(path_to_city_data, f"{city_name}_stacked.png")
-    plt.imsave(path_to_stacked_image, rgba_image)
+    plt.imsave(path_to_stacked_image, stacked_im)
 
 
 def label_gen(city_name):
-    label_im2 = np.zeros(im_shape)
+    #label_im = np.zeros(im_shape)
     utm_polygon_coords = geo_coord_reprojection(city_name)
 
     global city_boundary
@@ -366,7 +357,7 @@ def label_gen(city_name):
 
             x_pixel_coord = math.floor(x_dist_im_corner / pixel_resolution)
             y_pixel_coord = math.floor(y_dist_im_corner / pixel_resolution)
-            label_im2[y_pixel_coord, x_pixel_coord] = 1
+            #label_im[y_pixel_coord, x_pixel_coord] = 1
 
             #y_pixel_coord = im_shape[0] - y_pixel_coord #index rows from top not bottom 
 
@@ -389,7 +380,7 @@ def label_gen(city_name):
     path_to_building_png = os.path.join(path_to_city_data, f"{city_name}_buildings.png")
     plt.imsave(path_to_building_png, label_im, cmap='gray')
 
-    build_stacked_im(city_name, label_im2)
+    build_stacked_im(city_name, label_im)
 
 
 def a_1_pipeline(city_name):
