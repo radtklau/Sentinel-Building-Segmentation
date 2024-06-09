@@ -14,9 +14,11 @@ import openeo
 import imageio
 from PIL import Image
 from pyproj import Transformer
+from pyproj import Proj
 import math
 from shapely.geometry import Polygon
 import rasterio.features
+from geopy.distance import geodesic
 
 def get_osm_building_data(city_name):
     if city_name not in sources.cities.available:
@@ -289,6 +291,9 @@ def geo_coord_reprojection(city_name, polygon=True, im_corners=None):
     # Create a transformer object for the conversion
     transformer = Transformer.from_crs(geographic_crs, utm_crs, always_xy=True)
 
+    #myproj = Proj("+proj=utm +zone="+str(utm_zone)+",\
+#+north +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+
     if polygon:
         utm_coords = []
 
@@ -297,6 +302,7 @@ def geo_coord_reprojection(city_name, polygon=True, im_corners=None):
             polygon_utm_coords = []
             for coords in building_coords:
                 utm_x, utm_y = transformer.transform(coords[0], coords[1])
+                #utm_x, utm_y = myproj(coords[0], coords[1])
                 utm_coord = [utm_x, utm_y]
                 polygon_utm_coords.append(utm_coord)
 
@@ -307,6 +313,8 @@ def geo_coord_reprojection(city_name, polygon=True, im_corners=None):
     else:
         utm_min_x, utm_min_y = transformer.transform(im_corners[0], im_corners[1])
         utm_max_x, utm_max_y = transformer.transform(im_corners[2], im_corners[3])
+        #utm_min_x, utm_min_y = myproj(im_corners[0], im_corners[1])
+        #utm_max_x, utm_max_y = myproj(im_corners[2], im_corners[3])
         return [utm_min_x, utm_min_y, utm_max_x, utm_max_y]
         #return []
     
@@ -374,7 +382,7 @@ def label_gen(city_name):
                                   (im_shape[0]-2, im_shape[1]-2)]))
     """
 
-    label_im = rasterio.features.rasterize(pixel_polygons, out_shape=im_shape)
+    label_im = rasterio.features.rasterize(pixel_polygons, out_shape=im_shape, all_touched=False)
 
     path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
     path_to_building_png = os.path.join(path_to_city_data, f"{city_name}_buildings.png")
@@ -382,6 +390,44 @@ def label_gen(city_name):
 
     build_stacked_im(city_name, label_im)
 
+"""
+def label_gen2(city_name):
+    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
+    path_to_building_data = os.path.join(path_to_city_data, f"{city_name}_buildings.pkl")
+    building_geometry = None
+    try:
+        with open(path_to_building_data, 'rb') as f:
+            building_geometry = pickle.load(f)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    min_longitude_point, min_latitude_point, max_longitude_point, max_latitude_point = find_extreme_points()
+    im_corners = [min_longitude_point[0], min_latitude_point[1], max_longitude_point[0], max_latitude_point[1]]
+
+    for polygon in building_geometry.values.data:
+        building_coords = np.array(polygon.exterior.coords)
+        polygon_utm_coords = []
+        for coords in building_coords:
+            x, y = coords[0], coords[1]
+            x_dist_im_corner = geodesic(x, utm_im_corners[0]).meters #408507.284
+            y_dist_im_corner = abs(utm_y_coord - utm_im_corners[3]) #5733278.111
+
+            x_pixel_coord = math.floor(x_dist_im_corner / pixel_resolution)
+            y_pixel_coord = math.floor(y_dist_im_corner / pixel_resolution)
+            #label_im[y_pixel_coord, x_pixel_coord] = 1
+
+            #y_pixel_coord = im_shape[0] - y_pixel_coord #index rows from top not bottom 
+
+            pixel_coord = (x_pixel_coord, y_pixel_coord)
+            pixel_polygon.append(pixel_coord)
+
+        pixel_polygons.append(Polygon(pixel_polygon))
+            #utm_x, utm_y = myproj(coords[0], coords[1])
+            utm_coord = [utm_x, utm_y]
+            polygon_utm_coords.append(utm_coord)
+
+        utm_coords.append(polygon_utm_coords)
+"""
 
 def a_1_pipeline(city_name):
     global city_boundary
