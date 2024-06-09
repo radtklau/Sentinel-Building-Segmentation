@@ -155,6 +155,26 @@ def buildings_pkl_to_png(city_name):
     # Save the plot as PNG with transparent background
     plt.savefig(path_to_building_png, transparent=True)
     plt.close(fig)
+
+def find_extreme_points():
+    boundary_coords = np.array(city_boundary["geometry"].exterior.coords)
+
+    max_longitude_index = np.argmax(boundary_coords[:, 0])
+    max_longitude_point = boundary_coords[max_longitude_index]
+
+    # Find the point with the lowest longitude
+    min_longitude_index = np.argmin(boundary_coords[:, 0])
+    min_longitude_point = boundary_coords[min_longitude_index]
+
+    # Find the point with the highest latitude
+    max_latitude_index = np.argmax(boundary_coords[:, 1])
+    max_latitude_point = boundary_coords[max_latitude_index]
+
+    # Find the point with the lowest latitude
+    min_latitude_index = np.argmin(boundary_coords[:, 1])
+    min_latitude_point = boundary_coords[min_latitude_index]
+
+    return min_longitude_point, min_latitude_point, max_longitude_point, max_latitude_point
     
 
 def get_sentinel_image_data(temporal_extent, bands, city_name):
@@ -163,13 +183,17 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
 
     print("Extracting city coordinates...")
     global city_boundary
+    min_longitude_point, min_latitude_point, max_longitude_point, max_latitude_point = find_extreme_points()
+
+    """
     min_longitude_point = city_boundary["geometry"].bounds[0]
     min_latitude_point = city_boundary["geometry"].bounds[1]
     max_longitude_point = city_boundary["geometry"].bounds[2]
     max_latitude_point = city_boundary["geometry"].bounds[3]
+    """
 
-    spatial_extent = {"west":min_longitude_point, "south":min_latitude_point, \
-                      "east":max_longitude_point, "north":max_latitude_point} 
+    spatial_extent = {"west":min_longitude_point[0], "south":min_latitude_point[1], \
+                      "east":max_longitude_point[0], "north":max_latitude_point[1]} 
     
     datacube = connection.load_collection("SENTINEL2_L2A", \
             spatial_extent=spatial_extent, \
@@ -284,6 +308,7 @@ def geo_coord_reprojection(city_name, polygon=True, im_corners=None):
         utm_min_x, utm_min_y = transformer.transform(im_corners[0], im_corners[1])
         utm_max_x, utm_max_y = transformer.transform(im_corners[2], im_corners[3])
         return [utm_min_x, utm_min_y, utm_max_x, utm_max_y]
+        #return []
     
 def build_stacked_im(city_name, label_im):
     path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
@@ -291,6 +316,15 @@ def build_stacked_im(city_name, label_im):
     rgb_im = Image.open(path_to_rgb_image).convert('RGB')  # Convert to RGB to remove the alpha channel
     rgb_im = np.array(rgb_im)
 
+    rgb_im = rgb_im / np.max(rgb_im)
+
+    rgba_image = np.zeros((rgb_im.shape[0], rgb_im.shape[1], 4))
+    rgba_image[:, :, :3] = rgb_im
+
+    # Set the alpha channel based on the binary image
+    rgba_image[:, :, 3] = label_im
+    plt.show()
+    """
     # Create a mask for the white pixels in the BW image
     mask = label_im == 1
 
@@ -299,52 +333,63 @@ def build_stacked_im(city_name, label_im):
 
     # Set the white pixels in the BW image to white in the RGB image
     stacked_im[mask] = [0, 0, 255]
-
+    """
     path_to_stacked_image = os.path.join(path_to_city_data, f"{city_name}_stacked.png")
-    plt.imsave(path_to_stacked_image, stacked_im)
+    plt.imsave(path_to_stacked_image, rgba_image)
+
 
 def label_gen(city_name):
-    #label_im = np.zeros(im_shape)
-    utm_polygons = geo_coord_reprojection(city_name) #utm_polygon_coords
+    label_im2 = np.zeros(im_shape)
+    utm_polygon_coords = geo_coord_reprojection(city_name)
 
     global city_boundary
+    min_longitude_point, min_latitude_point, max_longitude_point, max_latitude_point = find_extreme_points()
+    """
     min_longitude_point = city_boundary["geometry"].bounds[0]
     min_latitude_point = city_boundary["geometry"].bounds[1]
     max_longitude_point = city_boundary["geometry"].bounds[2]
     max_latitude_point = city_boundary["geometry"].bounds[3]
-
-    im_corners = [min_longitude_point, min_latitude_point, max_longitude_point, max_latitude_point]
+    """
+    im_corners = [min_longitude_point[0], min_latitude_point[1], max_longitude_point[0], max_latitude_point[1]]
     utm_im_corners = geo_coord_reprojection(city_name, polygon=False, im_corners=im_corners)
     print("x")
     pixel_resolution = 10
 
     pixel_polygons = []
-    for utm_polygon in utm_polygons:
+    for utm_polygon_coord in utm_polygon_coords:
         pixel_polygon = []
-        for utm_coord in utm_polygon:
-            x_coord = utm_coord[0]
-            y_coord = utm_coord[1]
-            x_dist_im_corner = x_coord - utm_im_corners[0]
-            y_dist_im_corner = y_coord - utm_im_corners[1]
+        for utm_coord in utm_polygon_coord:
+            utm_x_coord = utm_coord[0]
+            utm_y_coord = utm_coord[1]
+            x_dist_im_corner = utm_x_coord - utm_im_corners[0] #408507.284
+            y_dist_im_corner = abs(utm_y_coord - utm_im_corners[3]) #5733278.111
 
             x_pixel_coord = math.floor(x_dist_im_corner / pixel_resolution)
             y_pixel_coord = math.floor(y_dist_im_corner / pixel_resolution)
-            #label_im[y_pixel_coord, x_pixel_coord] = 1
+            label_im2[y_pixel_coord, x_pixel_coord] = 1
 
-            y_pixel_coord = im_shape[0] - y_pixel_coord #index rows from top not bottom 
+            #y_pixel_coord = im_shape[0] - y_pixel_coord #index rows from top not bottom 
 
             pixel_coord = (x_pixel_coord, y_pixel_coord)
             pixel_polygon.append(pixel_coord)
 
         pixel_polygons.append(Polygon(pixel_polygon))
-    
+
+    #pixel_polygon.append(Polygon([(0,0),(0,100),(100,0),(100,100)]))
+    """
+    pixel_polygon.append(Polygon([(im_shape[0]-1, im_shape[1]-1),
+                                  (im_shape[0]-2, im_shape[1]-1)
+                                  (im_shape[0]-1, im_shape[1]-2)
+                                  (im_shape[0]-2, im_shape[1]-2)]))
+    """
+
     label_im = rasterio.features.rasterize(pixel_polygons, out_shape=im_shape)
 
     path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
     path_to_building_png = os.path.join(path_to_city_data, f"{city_name}_buildings.png")
     plt.imsave(path_to_building_png, label_im, cmap='gray')
 
-    build_stacked_im(city_name, label_im)
+    build_stacked_im(city_name, label_im2)
 
 
 def a_1_pipeline(city_name):
