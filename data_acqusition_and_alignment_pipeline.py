@@ -193,7 +193,7 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     max_longitude_point = city_boundary["geometry"].bounds[2]
     max_latitude_point = city_boundary["geometry"].bounds[3]
     """
-
+    global spatial_extent
     spatial_extent = {"west":min_longitude_point[0], "south":min_latitude_point[1], \
                       "east":max_longitude_point[0], "north":max_latitude_point[1]} 
     
@@ -230,11 +230,9 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
 
     global im_shape
     im_shape = r_im.shape
-    print(im_shape)
 
-    print("Building stacked image...")
-    #build_stacked_im(city_name)
-    buildings_rgb_stacked_im = 0 #TODO
+
+
 
     print("Writing to disk...")
     building_and_sentinel_data_dir_name = "building_and_sentinel_data"
@@ -286,23 +284,18 @@ def geo_coord_reprojection(city_name, polygon=True, im_corners=None):
         utm_crs = f'EPSG:327{utm_zone}'
 
     geographic_crs = 'EPSG:4326'
-    #utm_crs = 'EPSG:1078'
+    #utm_crs = 'EPSG:25832'
 
     # Create a transformer object for the conversion
     transformer = Transformer.from_crs(geographic_crs, utm_crs, always_xy=True)
 
-    #myproj = Proj("+proj=utm +zone="+str(utm_zone)+",\
-#+north +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
-
     if polygon:
         utm_coords = []
-
         for polygon in building_geometry.values.data:
             building_coords = np.array(polygon.exterior.coords)
             polygon_utm_coords = []
             for coords in building_coords:
                 utm_x, utm_y = transformer.transform(coords[0], coords[1])
-                #utm_x, utm_y = myproj(coords[0], coords[1])
                 utm_coord = [utm_x, utm_y]
                 polygon_utm_coords.append(utm_coord)
 
@@ -311,12 +304,12 @@ def geo_coord_reprojection(city_name, polygon=True, im_corners=None):
         return utm_coords
     
     else:
-        utm_min_x, utm_min_y = transformer.transform(im_corners[0], im_corners[1])
-        utm_max_x, utm_max_y = transformer.transform(im_corners[2], im_corners[3])
-        #utm_min_x, utm_min_y = myproj(im_corners[0], im_corners[1])
-        #utm_max_x, utm_max_y = myproj(im_corners[2], im_corners[3])
-        return [utm_min_x, utm_min_y, utm_max_x, utm_max_y]
-        #return []
+        utm_min_x, _ = transformer.transform(im_corners[0], im_corners[1])
+        _, utm_max_y = transformer.transform(im_corners[0], im_corners[3])
+        #utm_min_x, utm_max_y = transformer.transform(im_corners[0], im_corners[3])
+        #utm_min_x *= 0.9996
+        #utm_max_y *= 0.9996
+        return [utm_min_x, utm_max_y]
     
 def build_stacked_im(city_name, label_im):
     path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
@@ -338,20 +331,14 @@ def build_stacked_im(city_name, label_im):
 
 
 def label_gen(city_name):
-    #label_im = np.zeros(im_shape)
     utm_polygon_coords = geo_coord_reprojection(city_name)
 
     global city_boundary
     min_longitude_point, min_latitude_point, max_longitude_point, max_latitude_point = find_extreme_points()
-    """
-    min_longitude_point = city_boundary["geometry"].bounds[0]
-    min_latitude_point = city_boundary["geometry"].bounds[1]
-    max_longitude_point = city_boundary["geometry"].bounds[2]
-    max_latitude_point = city_boundary["geometry"].bounds[3]
-    """
+
     im_corners = [min_longitude_point[0], min_latitude_point[1], max_longitude_point[0], max_latitude_point[1]]
     utm_im_corners = geo_coord_reprojection(city_name, polygon=False, im_corners=im_corners)
-    print("x")
+
     pixel_resolution = 10
 
     pixel_polygons = []
@@ -360,74 +347,33 @@ def label_gen(city_name):
         for utm_coord in utm_polygon_coord:
             utm_x_coord = utm_coord[0]
             utm_y_coord = utm_coord[1]
-            x_dist_im_corner = utm_x_coord - utm_im_corners[0] #408507.284
-            y_dist_im_corner = abs(utm_y_coord - utm_im_corners[3]) #5733278.111
+            x_dist_im_corner = utm_x_coord - utm_im_corners[0]
+            y_dist_im_corner = abs(utm_y_coord - utm_im_corners[1])
 
             x_pixel_coord = math.floor(x_dist_im_corner / pixel_resolution)
             y_pixel_coord = math.floor(y_dist_im_corner / pixel_resolution)
-            #label_im[y_pixel_coord, x_pixel_coord] = 1
-
-            #y_pixel_coord = im_shape[0] - y_pixel_coord #index rows from top not bottom 
 
             pixel_coord = (x_pixel_coord, y_pixel_coord)
             pixel_polygon.append(pixel_coord)
 
         pixel_polygons.append(Polygon(pixel_polygon))
 
-    #pixel_polygon.append(Polygon([(0,0),(0,100),(100,0),(100,100)]))
-    """
-    pixel_polygon.append(Polygon([(im_shape[0]-1, im_shape[1]-1),
-                                  (im_shape[0]-2, im_shape[1]-1)
-                                  (im_shape[0]-1, im_shape[1]-2)
-                                  (im_shape[0]-2, im_shape[1]-2)]))
-    """
+    #REMOVE#
+    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
+    path_to_rgb_image = os.path.join(path_to_city_data, f"{city_name}_r.png")
+    r_im = Image.open(path_to_rgb_image)
+    r_im = np.array(r_im)      
+    global im_shape
+    im_shape = r_im.shape[:2]  
+    #REMOVE#
 
-    label_im = rasterio.features.rasterize(pixel_polygons, out_shape=im_shape, all_touched=False)
+    label_im = rasterio.features.rasterize(pixel_polygons, out_shape=im_shape, all_touched=True)
 
     path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
     path_to_building_png = os.path.join(path_to_city_data, f"{city_name}_buildings.png")
     plt.imsave(path_to_building_png, label_im, cmap='gray')
-
+    print("Building stacked image...")
     build_stacked_im(city_name, label_im)
-
-"""
-def label_gen2(city_name):
-    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
-    path_to_building_data = os.path.join(path_to_city_data, f"{city_name}_buildings.pkl")
-    building_geometry = None
-    try:
-        with open(path_to_building_data, 'rb') as f:
-            building_geometry = pickle.load(f)
-    except Exception as e:
-        print(f"An error occurred: {e}")
-
-    min_longitude_point, min_latitude_point, max_longitude_point, max_latitude_point = find_extreme_points()
-    im_corners = [min_longitude_point[0], min_latitude_point[1], max_longitude_point[0], max_latitude_point[1]]
-
-    for polygon in building_geometry.values.data:
-        building_coords = np.array(polygon.exterior.coords)
-        polygon_utm_coords = []
-        for coords in building_coords:
-            x, y = coords[0], coords[1]
-            x_dist_im_corner = geodesic(x, utm_im_corners[0]).meters #408507.284
-            y_dist_im_corner = abs(utm_y_coord - utm_im_corners[3]) #5733278.111
-
-            x_pixel_coord = math.floor(x_dist_im_corner / pixel_resolution)
-            y_pixel_coord = math.floor(y_dist_im_corner / pixel_resolution)
-            #label_im[y_pixel_coord, x_pixel_coord] = 1
-
-            #y_pixel_coord = im_shape[0] - y_pixel_coord #index rows from top not bottom 
-
-            pixel_coord = (x_pixel_coord, y_pixel_coord)
-            pixel_polygon.append(pixel_coord)
-
-        pixel_polygons.append(Polygon(pixel_polygon))
-            #utm_x, utm_y = myproj(coords[0], coords[1])
-            utm_coord = [utm_x, utm_y]
-            polygon_utm_coords.append(utm_coord)
-
-        utm_coords.append(polygon_utm_coords)
-"""
 
 def a_1_pipeline(city_name):
     global city_boundary
@@ -436,16 +382,12 @@ def a_1_pipeline(city_name):
     get_osm_building_data(city_name)
     #plot_building_data(city_name)
 
-    #spatial_extent={"west": 13.10, "south": 52.35, "east": 13.66, "north": 52.64} (berlin)
     temporal_extent=["2024-05-13", "2024-05-14"]
     bands=["B04", "B03", "B02", "B08"]
 
     get_sentinel_image_data(temporal_extent, bands, city_name)
     label_gen(city_name)
 
-city_name = "Hamm"
+city_name = "Flensburg"
 a_1_pipeline(city_name)
 #plot_data("Hamm", "buildings")
-
-
-
