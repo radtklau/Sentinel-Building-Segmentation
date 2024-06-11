@@ -94,30 +94,17 @@ def get_city_boundary(fp, city_name):
     return city_boundary
 
 def plot_data(city_name, type): #plot relevant data
-    if type not in ["rgb", "irb", "buildings", "rgb_buildings", "r", "g", "b"]:
+    if type not in ["rgb", "irb", "buildings", "rgb_buildings", "r", "g", "b", "vnir", "stacked"]:
         print("Not a valid type.")
         return
     
     path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
 
-    if type == "buildings":
-        path_to_building_data = os.path.join(path_to_city_data, f"{city_name}_buildings.pkl")
-        building_geometry = None
-        try:
-            with open(path_to_building_data, 'rb') as f:
-                building_geometry = pickle.load(f)
-        except Exception as e:
-            print(f"An error occurred: {e}")
-
-        _, ax = plt.subplots()
-        building_geometry.plot(ax=ax)
-        plt.show()
-    else:
-        path_to_image = os.path.join(path_to_city_data, f"{city_name}_{type}.png")
-        image = mpimg.imread(path_to_image)
-        plt.imshow(image)
-        plt.axis('off')
-        plt.show()
+    path_to_image = os.path.join(path_to_city_data, f"{city_name}_{type}.png")
+    image = mpimg.imread(path_to_image)
+    plt.imshow(image)
+    plt.axis('off')
+    plt.show()
     
 
 def get_sentinel_image_data(temporal_extent, bands, city_name):
@@ -212,7 +199,7 @@ def extract_coordinates(geometry):
         return exterior_coords
     elif geometry.geom_type == 'MultiPolygon':
         all_coords = []
-        for polygon in geometry:
+        for polygon in geometry.geoms:
             all_coords.extend(list(polygon.exterior.coords))
         return all_coords
     else:
@@ -270,18 +257,14 @@ def label_gen(city_name):
 
 
 def a_1_pipeline(city_name):
-    global city_boundary
-    global im_shape
-
     get_osm_building_data(city_name)
-    #plot_building_data(city_name)
 
-    temporal_extent=["2024-05-13", "2024-05-14"]
+    temporal_extent=["2024-01-10", "2024-01-11"]
     bands=["B04", "B03", "B02", "B08"]
-
     get_sentinel_image_data(temporal_extent, bands, city_name)
+
     label_gen(city_name)
 
-city_name = "Hamm"
+city_name = "Lima"
 a_1_pipeline(city_name)
-#plot_data("Hamm", "buildings")
+#plot_data(city_name, "buildings")
