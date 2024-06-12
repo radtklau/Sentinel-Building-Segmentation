@@ -52,7 +52,7 @@ def get_osm_building_data(city_name):
         pickle.dump(buildings_in_city_boundaries, f)
 
 
-def get_city_boundary(fp, city_name):
+def get_city_boundary(fp, city_name): #BUG extracts airport for Perth
     osm = OSM(fp)
     print("Extracting city boundaries...")
     boundaries_city = osm.get_boundaries(name=city_name)
@@ -111,7 +111,6 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     print("Connecting to backend...")
     connection = openeo.connect("https://openeo.dataspace.copernicus.eu/openeo/1.2").authenticate_oidc()
 
-    print("Extracting city coordinates...")
     global city_boundary
     min_longitude_point = city_boundary["geometry"].bounds[0]
     min_latitude_point = city_boundary["geometry"].bounds[1]
@@ -259,12 +258,12 @@ def label_gen(city_name):
 def a_1_pipeline(city_name):
     get_osm_building_data(city_name)
 
-    temporal_extent=["2024-01-10", "2024-01-11"]
+    temporal_extent=["2024-05-14", "2024-05-15"]
     bands=["B04", "B03", "B02", "B08"]
     get_sentinel_image_data(temporal_extent, bands, city_name)
 
     label_gen(city_name)
 
-city_name = "Lima"
+city_name = "Wien"
 a_1_pipeline(city_name)
 #plot_data(city_name, "buildings")
