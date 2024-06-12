@@ -3,3 +3,6 @@
 *.shp
 *.tiff
 /building_and_sentinel_data
+*.png
+*.pkl
+*.tiff
