@@ -4,6 +4,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import sys
 from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 
 def prepare_tensors(city_names, patch_size=64):
     label_tensors = []
@@ -75,8 +76,34 @@ def build_final_tensors(label_tensors, feature_tensors):
     label_data_fp = os.path.join(path_to_dataset, 'labels.npy')
     np.save(feature_data_fp, final_feature_tensor)
     np.save(label_data_fp, final_label_tensor)
-    
 
+    train_size = 0.7
+    val_size = 0.15
+    test_size = 0.15
+
+    features_train, features_temp, labels_train, labels_temp = train_test_split( \
+    final_feature_tensor, final_label_tensor, test_size=(1 - train_size), random_state=42)
+    
+    temp_size = val_size + test_size
+    val_test_split = val_size / temp_size
+
+    features_val, features_test, labels_val, labels_test = train_test_split( \
+    features_temp, labels_temp, test_size=val_test_split, random_state=42)
+
+    feature_data_train_fp = os.path.join(path_to_dataset, 'features_train.npy')
+    label_data_train_fp = os.path.join(path_to_dataset, 'labels_train.npy')
+    np.save(feature_data_train_fp, features_train)
+    np.save(label_data_train_fp, labels_train)
+
+    feature_data_test_fp = os.path.join(path_to_dataset, 'features_test.npy')
+    label_data_test_fp = os.path.join(path_to_dataset, 'labels_test.npy')
+    np.save(feature_data_test_fp, features_test)
+    np.save(label_data_test_fp, labels_test)
+
+    feature_data_val_fp = os.path.join(path_to_dataset, 'features_val.npy')
+    label_data_val_fp = os.path.join(path_to_dataset, 'labels_val.npy')
+    np.save(feature_data_val_fp, features_val)
+    np.save(label_data_val_fp, labels_val)
 
 def remove_cloudy_patches(label_tensor, feature_tensor):
     return label_tensor, feature_tensor
