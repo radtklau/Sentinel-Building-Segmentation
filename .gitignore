@@ -6,3 +6,4 @@
 *.png
 *.pkl
 *.tiff
+/datasets

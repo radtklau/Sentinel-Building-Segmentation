@@ -25,23 +25,19 @@ def prepare_tensors(city_names, patch_size=64):
             print("ERROR. Patch size is bigger than image.")
             sys.exit()
         
-        label_tensor = np.zeros((1, patch_size, patch_size))
-        feature_tensor = np.zeros((1, patch_size, patch_size, 3))
-
         min_dim_len = min(label_matrix.shape)
         indices = np.arange(0, min_dim_len - patch_size, patch_size)
 
+        num_patches = len(indices) ** 2 + 1
+        label_tensor = np.zeros((num_patches, patch_size, patch_size), dtype=np.uint8)
+        feature_tensor = np.zeros((num_patches, patch_size, patch_size, 3), dtype=np.uint8)
+
         for i in range(len(indices)):
-            print(i)
             for index in indices:
                 label_patch = label_matrix[index:index+patch_size, indices[i]:indices[i]+patch_size]
                 feature_patch = rgb_im[index:index+patch_size, indices[i]:indices[i]+patch_size,:]
-
-                label_patch = np.expand_dims(label_patch, axis=0)
-                feature_patch = np.expand_dims(feature_patch, axis=0)
-
-                label_tensor = np.concatenate((label_tensor, label_patch), axis=0)
-                feature_tensor = np.concatenate((feature_tensor, feature_patch), axis=0)
+                label_tensor[i] = label_patch
+                feature_tensor[i] = feature_patch
 
         label_tensor = label_tensor[1:]
         feature_tensor = feature_tensor[1:]
@@ -57,9 +53,30 @@ def build_final_tensors(label_tensors, feature_tensors):
     #stack into one tensor for labels and one for features
     #split into train, test and val dataset based on some rules (equal feature dist etc)
     #store train, test and val datasets in own dir with metadata about preparation params
+    final_label_tensor = label_tensors[0]
+    final_feature_tensor = feature_tensors[0]
+    del label_tensors[0]
+    del feature_tensors[0]
 
+    for label_tensor, feature_tensor in zip(label_tensors, feature_tensors):
+        final_label_tensor = np.concatenate((final_label_tensor, label_tensor), axis=0)
+        final_feature_tensor = np.concatenate((final_feature_tensor, feature_tensor), axis=0)
 
-    pass
+    dataset_ind = 0
+    while True:
+        path_to_dataset = f"datasets/dataset_{dataset_ind}"
+        if not os.path.exists(path_to_dataset):
+            os.makedirs(path_to_dataset)
+            break
+        else:
+            dataset_ind += 1
+
+    feature_data_fp = os.path.join(path_to_dataset, 'features.npy')
+    label_data_fp = os.path.join(path_to_dataset, 'labels.npy')
+    np.save(feature_data_fp, final_feature_tensor)
+    np.save(label_data_fp, final_label_tensor)
+    
+
 
 def remove_cloudy_patches(label_tensor, feature_tensor):
     return label_tensor, feature_tensor
@@ -69,7 +86,7 @@ def a_2_pipeline(city_names):
 
     label_tensors, feature_tensors = prepare_tensors(city_names)
     build_final_tensors(label_tensors, feature_tensors) 
-    pass
 
+global city_names
 city_names = ["Berlin", "Denver", "Wien", "Helsinki", "Hamm"]
 a_2_pipeline(city_names)
