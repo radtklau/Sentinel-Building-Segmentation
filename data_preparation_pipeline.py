@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import sys
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
+from skimage.color import rgb2gray
 
 def prepare_tensors(city_names, patch_size=64):
     label_tensors = []
@@ -43,6 +44,7 @@ def prepare_tensors(city_names, patch_size=64):
         label_tensor = label_tensor[1:]
         feature_tensor = feature_tensor[1:]
 
+        print(city_name)
         label_tensor, feature_tensor = remove_cloudy_patches(label_tensor, feature_tensor)
 
         label_tensors.append(label_tensor)
@@ -77,18 +79,28 @@ def build_final_tensors(label_tensors, feature_tensors):
     np.save(feature_data_fp, final_feature_tensor)
     np.save(label_data_fp, final_label_tensor)
 
+    final_label_tensor_flat = final_label_tensor.flatten()
+
     train_size = 0.7
     val_size = 0.15
     test_size = 0.15
 
     features_train, features_temp, labels_train, labels_temp = train_test_split( \
-    final_feature_tensor, final_label_tensor, test_size=(1 - train_size), random_state=42)
+        final_feature_tensor, final_label_tensor, test_size=(1 - train_size), \
+        stratify=final_label_tensor_flat, random_state=42)
     
     temp_size = val_size + test_size
     val_test_split = val_size / temp_size
 
+    labels_temp_flat = labels_temp.flatten()
+
     features_val, features_test, labels_val, labels_test = train_test_split( \
-    features_temp, labels_temp, test_size=val_test_split, random_state=42)
+        features_temp, labels_temp, test_size=val_test_split, \
+        stratify=labels_temp_flat, random_state=42)
+    
+    #TODO right now only stratification is used to balance out the labels
+    #in the datasets, maybe implement further strategies to ensure balanced
+    #feature distribution
 
     feature_data_train_fp = os.path.join(path_to_dataset, 'features_train.npy')
     label_data_train_fp = os.path.join(path_to_dataset, 'labels_train.npy')
@@ -105,12 +117,29 @@ def build_final_tensors(label_tensors, feature_tensors):
     np.save(feature_data_val_fp, features_val)
     np.save(label_data_val_fp, labels_val)
 
+    #TODO save metadata
+
+
 def remove_cloudy_patches(label_tensor, feature_tensor):
+    threshold = 0.8
+
+    for i, patch in enumerate(feature_tensor):
+        grayscale_patch = rgb2gray(patch)
+        cloud_mask = grayscale_patch > threshold
+        cloud_pixel_count = np.sum(cloud_mask)
+        total_pixel_count = grayscale_patch.size
+        cloud_percentage = (cloud_pixel_count / total_pixel_count) * 100
+        if cloud_percentage > 80:
+            print(f"Cloud percentage: {cloud_percentage:.2f}% in patch {i}")
+            plt.imshow(patch)
+            plt.show()
+
+
+
     return label_tensor, feature_tensor
 
 
 def a_2_pipeline(city_names):
-
     label_tensors, feature_tensors = prepare_tensors(city_names)
     build_final_tensors(label_tensors, feature_tensors) 
 

@@ -264,6 +264,6 @@ def a_1_pipeline(city_name):
 
     label_gen(city_name)
 
-city_name = "Wien"
+city_name = "Oslo"
 a_1_pipeline(city_name)
 #plot_data(city_name, "buildings")
