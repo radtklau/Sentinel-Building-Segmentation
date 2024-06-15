@@ -45,7 +45,8 @@ def prepare_tensors(city_names, patch_size=64):
         feature_tensor = feature_tensor[1:]
 
         print(city_name)
-        label_tensor, feature_tensor = remove_cloudy_patches(label_tensor, feature_tensor)
+        removal_thresh = 10 #%
+        label_tensor, feature_tensor = remove_cloudy_patches(label_tensor, feature_tensor, removal_thresh)
 
         label_tensors.append(label_tensor)
         feature_tensors.append(feature_tensor)
@@ -120,16 +121,18 @@ def build_final_tensors(label_tensors, feature_tensors):
     #TODO save metadata
 
 
-def remove_cloudy_patches(label_tensor, feature_tensor):
-    threshold = 0.8
+def remove_cloudy_patches(label_tensor, feature_tensor, removal_thresh):
+    cloud_thresh = 0.8
 
     for i, patch in enumerate(feature_tensor):
         grayscale_patch = rgb2gray(patch)
-        cloud_mask = grayscale_patch > threshold
+        cloud_mask = grayscale_patch > cloud_thresh
         cloud_pixel_count = np.sum(cloud_mask)
         total_pixel_count = grayscale_patch.size
         cloud_percentage = (cloud_pixel_count / total_pixel_count) * 100
-        if cloud_percentage > 80:
+        if cloud_percentage > removal_thresh:
+            feature_tensor = np.delete(feature_tensor, i, axis=0)
+            label_tensor = np.delete(label_tensor, i, axis=0)
             print(f"Cloud percentage: {cloud_percentage:.2f}% in patch {i}")
             plt.imshow(patch)
             plt.show()
