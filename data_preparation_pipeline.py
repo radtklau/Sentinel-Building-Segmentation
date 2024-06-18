@@ -77,6 +77,9 @@ def build_final_tensors(label_tensors, feature_tensors):
 
     feature_data_fp = os.path.join(path_to_dataset, 'features.npy')
     label_data_fp = os.path.join(path_to_dataset, 'labels.npy')
+    
+    final_feature_tensor = np.transpose(final_feature_tensor, (0, 3, 1, 2)) #transpose for pytorch conv2d()
+
     np.save(feature_data_fp, final_feature_tensor)
     np.save(label_data_fp, final_label_tensor)
 
@@ -106,10 +109,12 @@ def build_final_tensors(label_tensors, feature_tensors):
     np.save(feature_data_train_fp, features_train)
     np.save(label_data_train_fp, labels_train)
 
+
     feature_data_test_fp = os.path.join(path_to_dataset, 'features_test.npy')
     label_data_test_fp = os.path.join(path_to_dataset, 'labels_test.npy')
     np.save(feature_data_test_fp, features_test)
     np.save(label_data_test_fp, labels_test)
+
 
     feature_data_val_fp = os.path.join(path_to_dataset, 'features_val.npy')
     label_data_val_fp = os.path.join(path_to_dataset, 'labels_val.npy')
