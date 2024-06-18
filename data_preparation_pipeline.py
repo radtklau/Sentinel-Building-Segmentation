@@ -80,24 +80,22 @@ def build_final_tensors(label_tensors, feature_tensors):
     np.save(feature_data_fp, final_feature_tensor)
     np.save(label_data_fp, final_label_tensor)
 
-    final_label_tensor_flat = final_label_tensor.flatten()
+    #final_label_tensor_flat = final_label_tensor.flatten()
 
     train_size = 0.7
     val_size = 0.15
     test_size = 0.15
 
     features_train, features_temp, labels_train, labels_temp = train_test_split( \
-        final_feature_tensor, final_label_tensor, test_size=(1 - train_size), \
-        stratify=final_label_tensor_flat, random_state=42)
+        final_feature_tensor, final_label_tensor, test_size=(1 - train_size), random_state=42)
     
     temp_size = val_size + test_size
     val_test_split = val_size / temp_size
 
-    labels_temp_flat = labels_temp.flatten()
+    #labels_temp_flat = labels_temp.flatten()
 
     features_val, features_test, labels_val, labels_test = train_test_split( \
-        features_temp, labels_temp, test_size=val_test_split, \
-        stratify=labels_temp_flat, random_state=42)
+        features_temp, labels_temp, test_size=val_test_split, random_state=42)
     
     #TODO right now only stratification is used to balance out the labels
     #in the datasets, maybe implement further strategies to ensure balanced
@@ -134,10 +132,8 @@ def remove_cloudy_patches(label_tensor, feature_tensor, removal_thresh):
             feature_tensor = np.delete(feature_tensor, i, axis=0)
             label_tensor = np.delete(label_tensor, i, axis=0)
             print(f"Cloud percentage: {cloud_percentage:.2f}% in patch {i}")
-            plt.imshow(patch)
-            plt.show()
-
-
+            #plt.imshow(patch)
+            #plt.show()
 
     return label_tensor, feature_tensor
 
