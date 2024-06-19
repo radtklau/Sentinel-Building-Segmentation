@@ -6,6 +6,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
 import torch.nn.functional as F
+import os
+import sys
+
+class ImageDataset(Dataset):
+    def __init__(self, path_to_ds, mode):
+        if mode not in ["train", "test", "val"]:
+            print("Invalid mode.")
+            sys.exit()
+        else:
+            features_fn = f"features_{mode}.npy"
+            labels_fn = f"labels_{mode}.npy"
+
+        features_fp = os.path.join(path_to_ds, features_fn)
+        labels_fp = os.path.join(path_to_ds, labels_fn)
+
+        self.features = np.load(features_fp)
+        self.labels = np.load(labels_fp)
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, ind):
+        image = self.features[ind]
+        label = self.labels[ind]
+        return image, label
 
 class PixelClassifier(nn.Module):
     def __init__(self):
@@ -24,9 +49,32 @@ class PixelClassifier(nn.Module):
         x = F.relu(x)
         x = self.conv4(x)
         return x
-    
 
+def test():
+    random_data = torch.rand((1,3,64,64))
+    random_data_np = random_data[0].numpy()
+    random_data_np_t = np.transpose(random_data_np, (1, 2, 0))
 
+    plt.imshow(random_data_np_t)
+    plt.title('RGB Image')
+    plt.axis('off')  # Optional: turn off axis labels
+    plt.show()
+
+    print(random_data)
+
+    pxl_classifier = PixelClassifier()
+
+    output = pxl_classifier(random_data)
+
+    output_np = output[0].detach().numpy()
+    output_np_t = np.transpose(output_np, (1, 2, 0))
+
+    plt.imshow(output_np_t)
+    plt.title('RGB Image')
+    plt.axis('off')  # Optional: turn off axis labels
+    plt.show()
+
+    print(output)
     
 def get_dataloaders(train_images, train_labels, val_images, val_labels, batch_size=32):
     train_dataset = PixelClassifier(train_images, train_labels)
