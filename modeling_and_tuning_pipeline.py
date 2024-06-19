@@ -13,7 +13,7 @@ class PixelClassifier(nn.Module):
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(128, 1, kernel_size=1)  # Final convolution to get 1 channel output
+        self.conv4 = nn.Conv2d(128, 1, kernel_size=1)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -21,10 +21,12 @@ class PixelClassifier(nn.Module):
         x = self.conv2(x)
         x = F.relu(x)
         x = self.conv3(x)
-        x = torch.relu(self.conv2(x))
-        x = torch.relu(self.conv3(x))
-        x = self.conv4(x)  # No activation in the final layer for binary output
+        x = F.relu(x)
+        x = self.conv4(x)
         return x
+    
+
+
     
 def get_dataloaders(train_images, train_labels, val_images, val_labels, batch_size=32):
     train_dataset = PixelClassifier(train_images, train_labels)
@@ -75,6 +77,7 @@ def evaluate_model(model, data_loader, criterion):
     
     return val_loss, val_acc
 
+"""
 def a_3_pipeline():
     train_images = np.random.rand(100, 3, 64, 64)  # Example data
     train_labels = np.random.randint(0, 2, (100, 64, 64))  # Example labels
@@ -91,3 +94,4 @@ def a_3_pipeline():
     print(f'Validation Loss: {val_loss}, Validation Accuracy: {val_acc}')
 
 a_3_pipeline()
+"""
