@@ -5,23 +5,26 @@ from torch.utils.data import DataLoader, Dataset
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
+import torch.nn.functional as F
 
 class PixelClassifier(nn.Module):
     def __init__(self):
         super(PixelClassifier, self).__init__()
-        self.model = nn.Sequential(
-            nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(128, 1, kernel_size=1, padding=0),
-            nn.Sigmoid()
-        )
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(128, 1, kernel_size=1)  # Final convolution to get 1 channel output
 
     def forward(self, x):
-        return self.model(x)
+        x = self.conv1(x)
+        x = F.relu(x)
+        x = self.conv2(x)
+        x = F.relu(x)
+        x = self.conv3(x)
+        x = torch.relu(self.conv2(x))
+        x = torch.relu(self.conv3(x))
+        x = self.conv4(x)  # No activation in the final layer for binary output
+        return x
     
 def get_dataloaders(train_images, train_labels, val_images, val_labels, batch_size=32):
     train_dataset = PixelClassifier(train_images, train_labels)
@@ -86,3 +89,5 @@ def a_3_pipeline():
 
     val_loss, val_acc = evaluate_model(trained_model, val_loader, nn.BCELoss())
     print(f'Validation Loss: {val_loss}, Validation Accuracy: {val_acc}')
+
+a_3_pipeline()
