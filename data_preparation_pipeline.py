@@ -7,9 +7,9 @@ from tqdm import tqdm
 from sklearn.model_selection import train_test_split
 from skimage.color import rgb2gray
 
-def prepare_tensors(city_names, patch_size=64):
-    label_tensors = []
-    feature_tensors = []
+def prepare_arrays(city_names, patch_size=64):
+    label_arrays = []
+    feature_arrays = []
     for city_name in tqdm(city_names):
         path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
         path_to_rgb_image = os.path.join(path_to_city_data, f"{city_name}_rgb.png")
@@ -18,6 +18,14 @@ def prepare_tensors(city_names, patch_size=64):
         rgb_im = np.array(rgb_im)
         label_im = Image.open(path_to_label_image).convert('RGB')
         label_im = np.array(label_im)
+
+        plt.imshow(rgb_im)  
+        plt.title("rgb_im")
+        plt.show()
+
+        plt.imshow(label_im, cmap='gray', vmin=0, vmax=1)
+        plt.title("label_im")
+        plt.show()
 
         building_mask = (label_im == [0, 0, 255]).all(axis=2) 
         label_matrix = np.zeros((rgb_im.shape[0], rgb_im.shape[1]), dtype=np.uint8)
@@ -31,40 +39,62 @@ def prepare_tensors(city_names, patch_size=64):
         indices = np.arange(0, min_dim_len - patch_size, patch_size)
 
         num_patches = len(indices) ** 2 + 1
-        label_tensor = np.zeros((num_patches, patch_size, patch_size), dtype=np.uint8)
-        feature_tensor = np.zeros((num_patches, patch_size, patch_size, 3), dtype=np.uint8)
+        label_array = np.zeros((num_patches, patch_size, patch_size), dtype=np.uint8)
+        feature_array = np.zeros((num_patches, patch_size, patch_size, 3), dtype=np.uint8)
 
-        for i in range(len(indices)):
-            for index in indices:
-                label_patch = label_matrix[index:index+patch_size, indices[i]:indices[i]+patch_size]
-                feature_patch = rgb_im[index:index+patch_size, indices[i]:indices[i]+patch_size,:]
-                label_tensor[i] = label_patch
-                feature_tensor[i] = feature_patch
+        patch_ind = 0
+        for row_ind in indices:
+            for col_ind in indices:
+                label_patch = label_matrix[row_ind:row_ind + patch_size, col_ind:col_ind + patch_size]
+                feature_patch = rgb_im[row_ind:row_ind + patch_size, col_ind : col_ind + patch_size, :]
+                label_array[patch_ind] = label_patch
+                feature_array[patch_ind] = feature_patch
+                patch_ind += 1
 
-        label_tensor = label_tensor[1:]
-        feature_tensor = feature_tensor[1:]
-
+        label_array = label_array[1:]
+        feature_array = feature_array[1:]
+        array_analyzer_debugging(feature_array, label_array)
         print(city_name)
         removal_thresh = 10 #%
-        label_tensor, feature_tensor = remove_cloudy_patches(label_tensor, feature_tensor, removal_thresh)
+        label_array, feature_array = remove_cloudy_patches(label_array, feature_array, removal_thresh)
 
-        label_tensors.append(label_tensor)
-        feature_tensors.append(feature_tensor)
+        
 
-    return label_tensors, feature_tensors
+        label_arrays.append(label_array)
+        feature_arrays.append(feature_array)
 
-def build_final_tensors(label_tensors, feature_tensors):
-    #stack into one tensor for labels and one for features
+    return label_arrays, feature_arrays
+
+def array_analyzer_debugging(feature_array, label_array):
+    zero_count = 0
+    for i in range(feature_array.shape[0]):
+        image = feature_array[i]
+        red_channel_zero = np.all(image[0] == 0)
+        green_channel_zero = np.all(image[1] == 0)
+        blue_channel_zero = np.all(image[2] == 0)
+        if red_channel_zero or green_channel_zero or blue_channel_zero:
+            zero_count += 1
+            #plt.imshow(image)  # Use 'gray' colormap for grayscale images
+            #plt.show()
+
+    print(feature_array.shape)
+    print(zero_count)
+
+def build_final_arrays(label_arrays, feature_arrays):
+    #stack into one array for labels and one for features
     #split into train, test and val dataset based on some rules (equal feature dist etc)
     #store train, test and val datasets in own dir with metadata about preparation params
-    final_label_tensor = label_tensors[0]
-    final_feature_tensor = feature_tensors[0]
-    del label_tensors[0]
-    del feature_tensors[0]
+    final_label_array = label_arrays[0]
+    final_feature_array = feature_arrays[0]
+    del label_arrays[0]
+    del feature_arrays[0]
 
-    for label_tensor, feature_tensor in zip(label_tensors, feature_tensors):
-        final_label_tensor = np.concatenate((final_label_tensor, label_tensor), axis=0)
-        final_feature_tensor = np.concatenate((final_feature_tensor, feature_tensor), axis=0)
+    for label_array, feature_array in zip(label_arrays, feature_arrays):
+        final_label_array = np.concatenate((final_label_array, label_array), axis=0)
+        final_feature_array = np.concatenate((final_feature_array, feature_array), axis=0)
+
+
+    array_analyzer_debugging(final_feature_array, final_label_array)
 
     dataset_ind = 0
     while True:
@@ -78,19 +108,19 @@ def build_final_tensors(label_tensors, feature_tensors):
     feature_data_fp = os.path.join(path_to_dataset, 'features.npy')
     label_data_fp = os.path.join(path_to_dataset, 'labels.npy')
     
-    final_feature_tensor = np.transpose(final_feature_tensor, (0, 3, 1, 2)) #transpose for pytorch conv2d()
+    final_feature_array = np.transpose(final_feature_array, (0, 3, 1, 2)) #transpose for pytorch conv2d()
 
-    np.save(feature_data_fp, final_feature_tensor)
-    np.save(label_data_fp, final_label_tensor)
+    np.save(feature_data_fp, final_feature_array)
+    np.save(label_data_fp, final_label_array)
 
-    #final_label_tensor_flat = final_label_tensor.flatten()
+    #final_label_array_flat = final_label_array.flatten()
 
     train_size = 0.7
     val_size = 0.15
     test_size = 0.15
 
     features_train, features_temp, labels_train, labels_temp = train_test_split( \
-        final_feature_tensor, final_label_tensor, test_size=(1 - train_size), random_state=42)
+        final_feature_array, final_label_array, test_size=(1 - train_size), random_state=42)
     
     temp_size = val_size + test_size
     val_test_split = val_size / temp_size
@@ -124,28 +154,28 @@ def build_final_tensors(label_tensors, feature_tensors):
     #TODO save metadata
 
 
-def remove_cloudy_patches(label_tensor, feature_tensor, removal_thresh):
+def remove_cloudy_patches(label_array, feature_array, removal_thresh):
     cloud_thresh = 0.8
 
-    for i, patch in enumerate(feature_tensor):
+    for i, patch in enumerate(feature_array):
         grayscale_patch = rgb2gray(patch)
         cloud_mask = grayscale_patch > cloud_thresh
         cloud_pixel_count = np.sum(cloud_mask)
         total_pixel_count = grayscale_patch.size
         cloud_percentage = (cloud_pixel_count / total_pixel_count) * 100
         if cloud_percentage > removal_thresh:
-            feature_tensor = np.delete(feature_tensor, i, axis=0)
-            label_tensor = np.delete(label_tensor, i, axis=0)
+            feature_array = np.delete(feature_array, i, axis=0)
+            label_array = np.delete(label_array, i, axis=0)
             print(f"Cloud percentage: {cloud_percentage:.2f}% in patch {i}")
             #plt.imshow(patch)
             #plt.show()
 
-    return label_tensor, feature_tensor
+    return label_array, feature_array
 
 
 def a_2_pipeline(city_names):
-    label_tensors, feature_tensors = prepare_tensors(city_names)
-    build_final_tensors(label_tensors, feature_tensors) 
+    label_arrays, feature_arrays = prepare_arrays(city_names)
+    build_final_arrays(label_arrays, feature_arrays) 
 
 global city_names
 city_names = ["Berlin", "Denver", "Wien", "Helsinki", "Hamm"]
