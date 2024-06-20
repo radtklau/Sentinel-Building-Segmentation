@@ -19,14 +19,6 @@ def prepare_arrays(city_names, patch_size=64):
         label_im = Image.open(path_to_label_image).convert('RGB')
         label_im = np.array(label_im)
 
-        plt.imshow(rgb_im)  
-        plt.title("rgb_im")
-        plt.show()
-
-        plt.imshow(label_im, cmap='gray', vmin=0, vmax=1)
-        plt.title("label_im")
-        plt.show()
-
         building_mask = (label_im == [0, 0, 255]).all(axis=2) 
         label_matrix = np.zeros((rgb_im.shape[0], rgb_im.shape[1]), dtype=np.uint8)
         label_matrix[building_mask] = 1
@@ -35,27 +27,28 @@ def prepare_arrays(city_names, patch_size=64):
             print("ERROR. Patch size is bigger than image.")
             sys.exit()
         
-        min_dim_len = min(label_matrix.shape)
-        indices = np.arange(0, min_dim_len - patch_size, patch_size)
+        row_dim_len = label_matrix.shape[0]
+        col_dim_len = label_matrix.shape[1]
 
-        num_patches = len(indices) ** 2 + 1
+        row_indices = np.arange(0, row_dim_len - patch_size, patch_size)
+        col_indices = np.arange(0, col_dim_len - patch_size, patch_size)
+
+        num_patches = len(row_indices) * len(col_indices)
         label_array = np.zeros((num_patches, patch_size, patch_size), dtype=np.uint8)
         feature_array = np.zeros((num_patches, patch_size, patch_size, 3), dtype=np.uint8)
 
         patch_ind = 0
-        for row_ind in indices:
-            for col_ind in indices:
+        for row_ind in row_indices:
+            for col_ind in col_indices:
                 label_patch = label_matrix[row_ind:row_ind + patch_size, col_ind:col_ind + patch_size]
                 feature_patch = rgb_im[row_ind:row_ind + patch_size, col_ind : col_ind + patch_size, :]
                 label_array[patch_ind] = label_patch
                 feature_array[patch_ind] = feature_patch
                 patch_ind += 1
 
-        label_array = label_array[1:]
-        feature_array = feature_array[1:]
         array_analyzer_debugging(feature_array, label_array)
         print(city_name)
-        removal_thresh = 10 #%
+        removal_thresh = 20 #%
         label_array, feature_array = remove_cloudy_patches(label_array, feature_array, removal_thresh)
 
         
@@ -155,21 +148,36 @@ def build_final_arrays(label_arrays, feature_arrays):
 
 
 def remove_cloudy_patches(label_array, feature_array, removal_thresh):
-    cloud_thresh = 0.8
+    cloud_thresh = 0.95
 
+    num_patches_removed = 0
+    to_delete = []
     for i, patch in enumerate(feature_array):
+        red_zero = np.all(patch[0] == 0)
+        green_zero = np.all(patch[1] == 0)
+        blue_zero = np.all(patch[2] == 0)
+
         grayscale_patch = rgb2gray(patch)
         cloud_mask = grayscale_patch > cloud_thresh
         cloud_pixel_count = np.sum(cloud_mask)
         total_pixel_count = grayscale_patch.size
         cloud_percentage = (cloud_pixel_count / total_pixel_count) * 100
-        if cloud_percentage > removal_thresh:
-            feature_array = np.delete(feature_array, i, axis=0)
-            label_array = np.delete(label_array, i, axis=0)
+        
+        if cloud_percentage > removal_thresh or red_zero or green_zero or blue_zero:
+            to_delete.append(i)
             print(f"Cloud percentage: {cloud_percentage:.2f}% in patch {i}")
             #plt.imshow(patch)
             #plt.show()
+            num_patches_removed += 1
+        elif red_zero or green_zero or blue_zero:
+            print(f"Red channel is zero: {red_zero}, blue channel is zero: {blue_zero}, green channel is zero: {green_zero}")
+            to_delete.append(i)
+            num_patches_removed += 1
 
+    feature_array = np.delete(feature_array, to_delete, axis=0)
+    label_array = np.delete(label_array, to_delete, axis=0)
+
+    print(f"removed {num_patches_removed} patches")
     return label_array, feature_array
 
 
