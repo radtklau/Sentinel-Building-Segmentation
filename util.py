@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from PIL import Image
+import numpy as np
 
 def plot_city_boundary_extremes(boundary_coords):
     max_longitude_point, min_longitude_point, max_latitude_point, \
@@ -39,3 +41,21 @@ def find_extreme_coords(boundary_coords):
     min_latitude_point = boundary_coords[min_latitude_index]
 
     return max_longitude_point, min_longitude_point, max_latitude_point, min_latitude_point
+
+
+def crop_im():
+    path_rgb = "building_and_sentinel_data/Berlin/Berlin_rgb.png"
+    path_labels = "building_and_sentinel_data/Berlin/Berlin_buildings.png"
+    rgb_im = Image.open(path_rgb).convert('RGB')
+    rgb_im = np.array(rgb_im)
+    label_im = Image.open(path_labels).convert('RGB')
+    label_im = np.array(label_im)
+
+    label_im = label_im[1900:3000, 1500:2500]
+    rgb_im = rgb_im[1900:3000, 1500:2500]
+
+    plt.imsave("building_and_sentinel_data/Berlin/Berlin_rgb_crop.png", rgb_im)
+    plt.imsave("building_and_sentinel_data/Berlin/Berlin_buildings_crop.png", label_im)
+
+crop_im()
+
