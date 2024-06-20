@@ -12,8 +12,8 @@ def prepare_arrays(city_names, patch_size=64):
     feature_arrays = []
     for city_name in tqdm(city_names):
         path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
-        path_to_rgb_image = os.path.join(path_to_city_data, f"{city_name}_rgb_crop.png")
-        path_to_label_image = os.path.join(path_to_city_data, f"{city_name}_buildings_crop.png")
+        path_to_rgb_image = os.path.join(path_to_city_data, f"{city_name}_rgb.png")
+        path_to_label_image = os.path.join(path_to_city_data, f"{city_name}_buildings.png")
         rgb_im = Image.open(path_to_rgb_image).convert('RGB')
         rgb_im = np.array(rgb_im)
         label_im = Image.open(path_to_label_image).convert('RGB')
@@ -46,96 +46,16 @@ def prepare_arrays(city_names, patch_size=64):
                 feature_array[patch_ind] = feature_patch
                 patch_ind += 1
 
-        array_analyzer_debugging(feature_array, label_array)
-
         print(city_name)
-        removal_thresh = 20 #%
-        label_array, feature_array = remove_patches(label_array, feature_array, removal_thresh)
-
-        
+        cloud_removal_thresh = 20 #%
+        label_array, feature_array = remove_patches(label_array, feature_array, cloud_removal_thresh)
 
         label_arrays.append(label_array)
         feature_arrays.append(feature_array)
 
     return label_arrays, feature_arrays
 
-def array_analyzer_debugging(feature_array, label_array):
-    zero_count = 0
-    label_im_zero_count = 0
-    for i in range(feature_array.shape[0]):
-        image = feature_array[i]
-        l_im = label_array[i]
-        red_channel_zero = np.all(image[0] == 0)
-        green_channel_zero = np.all(image[1] == 0)
-        blue_channel_zero = np.all(image[2] == 0)
-
-        l_im_zero = np.all(l_im == 0)
-        """
-        plt.figure(figsize=(10, 5))
-        
-        # Plot the first image
-        plt.subplot(1, 2, 1)
-        plt.imshow(image)
-        plt.title('rgb')
-        plt.axis('off')  # Optional: turn off axis labels
-
-        # Plot the second image
-        plt.subplot(1, 2, 2)
-        plt.imshow(l_im, cmap='gray', vmin=0, vmax=1) 
-        plt.title('labels')
-        plt.axis('off')  # Optional: turn off axis labels
-
-        plt.show()
-        """
-        if red_channel_zero or green_channel_zero or blue_channel_zero:
-            zero_count += 1
-            plt.imshow(image)
-            plt.show()
-
-        if l_im_zero:
-            label_im_zero_count += 1
-            plt.figure(figsize=(10, 5))
-            
-            # Plot the first image
-            plt.subplot(1, 2, 1)
-            plt.imshow(image)
-            plt.title('rgb')
-            plt.axis('off')  # Optional: turn off axis labels
-
-            # Plot the second image
-            plt.subplot(1, 2, 2)
-            plt.imshow(l_im, cmap='gray', vmin=0, vmax=1) 
-            plt.title('labels')
-            plt.axis('off')  # Optional: turn off axis labels
-
-            plt.show()
-        else:
-            """
-            plt.figure(figsize=(10, 5))
-            
-            # Plot the first image
-            plt.subplot(1, 2, 1)
-            plt.imshow(image)
-            plt.title('rgb')
-            plt.axis('off')  # Optional: turn off axis labels
-
-            # Plot the second image
-            plt.subplot(1, 2, 2)
-            plt.imshow(l_im, cmap='gray', vmin=0, vmax=1) 
-            plt.title('labels')
-            plt.axis('off')  # Optional: turn off axis labels
-
-            plt.show()
-            """
-
-    print(feature_array.shape)
-    print(zero_count)
-    print(label_im_zero_count)
-
 def build_final_arrays(label_arrays, feature_arrays):
-    #stack into one array for labels and one for features
-    #split into train, test and val dataset based on some rules (equal feature dist etc)
-    #store train, test and val datasets in own dir with metadata about preparation params
     final_label_array = label_arrays[0]
     final_feature_array = feature_arrays[0]
     del label_arrays[0]
@@ -144,9 +64,6 @@ def build_final_arrays(label_arrays, feature_arrays):
     for label_array, feature_array in zip(label_arrays, feature_arrays):
         final_label_array = np.concatenate((final_label_array, label_array), axis=0)
         final_feature_array = np.concatenate((final_feature_array, feature_array), axis=0)
-
-
-    #array_analyzer_debugging(final_feature_array, final_label_array)
 
     dataset_ind = 0
     while True:
@@ -174,7 +91,7 @@ def build_final_arrays(label_arrays, feature_arrays):
     features_train, features_temp, labels_train, labels_temp = train_test_split( \
         final_feature_array, final_label_array, test_size=(1 - train_size), random_state=42)
     
-    array_analyzer_debugging(features_train, labels_train)
+    #array_analyzer_debugging(features_train, labels_train)
 
     temp_size = val_size + test_size
     val_test_split = val_size / temp_size
@@ -210,6 +127,7 @@ def build_final_arrays(label_arrays, feature_arrays):
 
 def remove_patches(label_array, feature_array, cloud_removal_thresh):
     cloud_thresh = 0.95
+    total_num_of_patches = feature_array.shape[0]
 
     num_patches_removed_cloud = 0
     num_patches_removed_black = 0
@@ -248,7 +166,7 @@ def remove_patches(label_array, feature_array, cloud_removal_thresh):
     label_array = np.delete(label_array, to_delete, axis=0)
 
     print(f"Removed {num_patches_removed_cloud} cloudy patches, {num_patches_removed_black} black \
-          patches and {num_patches_removed_no_label} patches with no label.")
+          patches and {num_patches_removed_no_label} patches with no label.\n(total number of patches: {total_num_of_patches},\npatches remaining: {feature_array.shape[0]})\n")
     
     return label_array, feature_array
 

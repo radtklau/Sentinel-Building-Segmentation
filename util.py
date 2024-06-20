@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
+import os
+import shutil
 
 def plot_city_boundary_extremes(boundary_coords):
     max_longitude_point, min_longitude_point, max_latitude_point, \
@@ -57,5 +59,90 @@ def crop_im():
     plt.imsave("building_and_sentinel_data/Berlin/Berlin_rgb_crop.png", rgb_im)
     plt.imsave("building_and_sentinel_data/Berlin/Berlin_buildings_crop.png", label_im)
 
-crop_im()
+def remove_subdirs(dir_path):
+    for item in os.listdir(dir_path):
+        item_path = os.path.join(dir_path, item)
+        
+        # Check if the item is a directory
+        if os.path.isdir(item_path):
+            # Remove the directory and its contents
+            shutil.rmtree(item_path)
+            print(f"Removed directory: {item_path}")
+        else:
+            print(f"Skipping non-directory item: {item_path}")
+
+#remove_subdirs("datasets/")
+
+def array_analyzer_debugging(feature_array, label_array):
+    zero_count = 0
+    label_im_zero_count = 0
+    for i in range(feature_array.shape[0]):
+        image = feature_array[i]
+        l_im = label_array[i]
+        red_channel_zero = np.all(image[0] == 0)
+        green_channel_zero = np.all(image[1] == 0)
+        blue_channel_zero = np.all(image[2] == 0)
+
+        l_im_zero = np.all(l_im == 0)
+        """
+        plt.figure(figsize=(10, 5))
+        
+        # Plot the first image
+        plt.subplot(1, 2, 1)
+        plt.imshow(image)
+        plt.title('rgb')
+        plt.axis('off')  # Optional: turn off axis labels
+
+        # Plot the second image
+        plt.subplot(1, 2, 2)
+        plt.imshow(l_im, cmap='gray', vmin=0, vmax=1) 
+        plt.title('labels')
+        plt.axis('off')  # Optional: turn off axis labels
+
+        plt.show()
+        """
+        if red_channel_zero or green_channel_zero or blue_channel_zero:
+            zero_count += 1
+            plt.imshow(image)
+            plt.show()
+
+        if l_im_zero:
+            label_im_zero_count += 1
+            plt.figure(figsize=(10, 5))
+            
+            # Plot the first image
+            plt.subplot(1, 2, 1)
+            plt.imshow(image)
+            plt.title('rgb')
+            plt.axis('off')  # Optional: turn off axis labels
+
+            # Plot the second image
+            plt.subplot(1, 2, 2)
+            plt.imshow(l_im, cmap='gray', vmin=0, vmax=1) 
+            plt.title('labels')
+            plt.axis('off')  # Optional: turn off axis labels
+
+            plt.show()
+        else:
+            """
+            plt.figure(figsize=(10, 5))
+            
+            # Plot the first image
+            plt.subplot(1, 2, 1)
+            plt.imshow(image)
+            plt.title('rgb')
+            plt.axis('off')  # Optional: turn off axis labels
+
+            # Plot the second image
+            plt.subplot(1, 2, 2)
+            plt.imshow(l_im, cmap='gray', vmin=0, vmax=1) 
+            plt.title('labels')
+            plt.axis('off')  # Optional: turn off axis labels
+
+            plt.show()
+            """
+
+    print(feature_array.shape)
+    print(zero_count)
+    print(label_im_zero_count)
 
