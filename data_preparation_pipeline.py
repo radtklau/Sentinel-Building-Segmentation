@@ -78,6 +78,7 @@ def build_final_arrays(label_arrays, feature_arrays):
     label_data_fp = os.path.join(path_to_dataset, 'labels.npy')
     
     final_feature_array = np.transpose(final_feature_array, (0, 3, 1, 2)) #transpose for pytorch conv2d()
+    final_feature_array = final_feature_array.astype(np.float32) / 255.0 #normalize
 
     np.save(feature_data_fp, final_feature_array)
     np.save(label_data_fp, final_label_array)
@@ -90,8 +91,6 @@ def build_final_arrays(label_arrays, feature_arrays):
 
     features_train, features_temp, labels_train, labels_temp = train_test_split( \
         final_feature_array, final_label_array, test_size=(1 - train_size), random_state=42)
-    
-    #array_analyzer_debugging(features_train, labels_train)
 
     temp_size = val_size + test_size
     val_test_split = val_size / temp_size
