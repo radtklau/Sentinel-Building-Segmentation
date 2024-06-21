@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import os
 import sys
 from tqdm import tqdm
+from datetime import datetime
 
 class ImageDataset(Dataset):
     def __init__(self, path_to_ds, mode):
@@ -55,31 +56,6 @@ class PixelClassifier(nn.Module):
         x = torch.sigmoid(x)
         return x
 
-def test():
-    random_data = torch.rand((1,3,64,64))
-    random_data_np = random_data[0].numpy()
-    random_data_np_t = np.transpose(random_data_np, (1, 2, 0))
-
-    plt.imshow(random_data_np_t)
-    plt.title('RGB Image')
-    plt.axis('off')
-    plt.show()
-
-    print(random_data)
-
-    pxl_classifier = PixelClassifier()
-
-    output = pxl_classifier(random_data)
-
-    output_np = output[0].detach().numpy()
-    output_np_t = np.transpose(output_np, (1, 2, 0))
-
-    plt.imshow(output_np_t)
-    plt.title('RGB Image')
-    plt.axis('off')
-    plt.show()
-
-    print(output)
     
 def get_dataloaders(path_to_ds, batch_size=32):
     print("Creating train, test and val datasets...")
@@ -94,11 +70,28 @@ def get_dataloaders(path_to_ds, batch_size=32):
     return train_loader, val_loader, test_loader
 
 def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.001):
+    models_dir_name = "models"
+    if not os.path.exists(models_dir_name):
+        os.makedirs(models_dir_name)
+
+    run_ind = 0
+    this_run_dir_name = ""
+    while True:
+        path_to_run = f"models/run_{run_ind}"
+        if not os.path.exists(path_to_run):
+            this_run_dir_name = f"run_{run_ind}"
+            break
+        else:
+            run_ind += 1
+
+    this_run_dir_path = os.path.join(models_dir_name, this_run_dir_name)
+    os.makedirs(this_run_dir_path)
+
     print("Training model...")
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
-    for epoch in range(num_epochs):
+    for epoch in tqdm(range(num_epochs)):
         model.train()
         running_loss = 0.0
         for images, labels in train_loader:
@@ -113,69 +106,21 @@ def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.
         val_loss, val_acc = evaluate_model(model, val_loader, criterion)
         print(f'Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(train_loader)}, Val Loss: {val_loss}, Val Acc: {val_acc}')
     
+    save_model(model, num_epochs, learning_rate, this_run_dir_path)
     return model
 
-def test_data_loading(train_loader):
-    for images, labels in train_loader:
-        print(images.shape)
-        image = images[0].permute(1,2,0).numpy()
-        print(image)
-
-        plt.imshow(image)
-        plt.title('RGB Image')
-        plt.axis('off')
-        plt.show()
-        print(labels.shape)
-        print(labels[0])
-
-        plt.imshow(labels[0].numpy(), cmap='gray', vmin=0, vmax=1)  # Use 'gray' colormap for grayscale images
-        plt.colorbar()  # Optional: add a colorbar
-        plt.title("Grayscale Image")
-        plt.show()
-
-def check_np_arrays():
-    path_to_ds = "datasets/dataset_8"
-    features_fn = "features_val.npy"
-    labels_fn = "labels_val.npy"
-    features_fp = os.path.join(path_to_ds, features_fn)
-    labels_fp = os.path.join(path_to_ds, labels_fn)
-    features = np.load(features_fp)
-    labels = np.load(labels_fp)
-
-    for feature_im, label_map in zip(features, labels):
-        print(np.max(feature_im), np.min(feature_im))
-        print(np.max(label_map), np.min(label_map))
-        mask = label_map == 1
-        feature_im = np.transpose(feature_im, (1, 2, 0))
-        stacked_im = np.copy(feature_im)
-        stacked_im[mask] = [0, 0, 255] #set blue
-        plt.figure(figsize=(10, 5))
-        
-        # Plot the first image
-        plt.subplot(1, 3, 1)
-        plt.imshow(feature_im)
-        plt.title('rgb')
-        plt.axis('off')  # Optional: turn off axis labels
-
-        # Plot the second image
-        plt.subplot(1, 3, 2)
-        plt.imshow(label_map, cmap='gray', vmin=0, vmax=1) 
-        plt.title('labels')
-        plt.axis('off')  # Optional: turn off axis labels
-
-        # Plot the third image
-        plt.subplot(1, 3, 3)
-        plt.imshow(stacked_im) 
-        plt.title('stacked')
-        plt.axis('off')  # Optional: turn off axis labels
-
-        plt.show()
-
+def save_model(model, num_epochs, learning_rate, this_run_dir_path):
+    current_datetime = datetime.now()
+    formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
+    model_name = f"ds{path_to_ds[-1]}_ep{num_epochs}_lr{learning_rate}\
+        _bs{batch_size}_{formatted_datetime}.pth"
+    path_to_model = os.path.join(this_run_dir_path, model_name)
+    torch.save(model, path_to_model)
 
 def evaluate_model(model, data_loader, criterion):
     print("Evaluating model...")
     model.eval()
-    val_loss = 0.0
+    loss = 0.0
     all_labels = []
     all_preds = []
     
@@ -183,26 +128,29 @@ def evaluate_model(model, data_loader, criterion):
         for images, labels in data_loader:
             outputs = model(images)
             loss = criterion(outputs, labels.unsqueeze(1))
-            val_loss += loss.item()
+            loss += loss.item()
             preds = (outputs > 0.5).float()
             all_labels.extend(labels.cpu().numpy().flatten())
             all_preds.extend(preds.cpu().numpy().flatten())
     
-    val_loss /= len(data_loader)
-    val_acc = accuracy_score(np.array(all_labels), np.array(all_preds))
+    loss /= len(data_loader)
+    acc = accuracy_score(np.array(all_labels), np.array(all_preds))
     
-    return val_loss, val_acc
+    return loss, acc
 
 
 def a_3_pipeline():
+    global path_to_ds
     path_to_ds = "datasets/dataset_9"
-    train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=32)
+    global batch_size
+    batch_size = 32
+    train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
     #test_data_loading(train_loader)
     #check_np_arrays()
     model = PixelClassifier()
 
     trained_model = train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.001)
-    #val_loss, val_acc = evaluate_model(trained_model, val_loader, nn.BCELoss())
-    #print(f'Validation Loss: {val_loss}, Validation Accuracy: {val_acc}')
+    test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss())
+    print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
 
 a_3_pipeline()
