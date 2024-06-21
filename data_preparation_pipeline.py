@@ -79,6 +79,7 @@ def build_final_arrays(label_arrays, feature_arrays):
     
     final_feature_array = np.transpose(final_feature_array, (0, 3, 1, 2)) #transpose for pytorch conv2d()
     final_feature_array = final_feature_array.astype(np.float32) / 255.0 #normalize
+    final_label_array = final_label_array.astype(np.float32)
 
     np.save(feature_data_fp, final_feature_array)
     np.save(label_data_fp, final_label_array)

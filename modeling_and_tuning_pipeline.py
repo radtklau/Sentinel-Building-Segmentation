@@ -8,6 +8,7 @@ from sklearn.metrics import accuracy_score
 import torch.nn.functional as F
 import os
 import sys
+from tqdm import tqdm
 
 class ImageDataset(Dataset):
     def __init__(self, path_to_ds, mode):
@@ -51,6 +52,7 @@ class PixelClassifier(nn.Module):
         x = self.conv3(x)
         x = F.relu(x)
         x = self.conv4(x)
+        x = torch.sigmoid(x)
         return x
 
 def test():
@@ -80,6 +82,7 @@ def test():
     print(output)
     
 def get_dataloaders(path_to_ds, batch_size=32):
+    print("Creating train, test and val datasets...")
     train_dataset = ImageDataset(path_to_ds, 'train')
     val_dataset = ImageDataset(path_to_ds, 'val')
     test_dataset = ImageDataset(path_to_ds, 'test')
@@ -91,6 +94,7 @@ def get_dataloaders(path_to_ds, batch_size=32):
     return train_loader, val_loader, test_loader
 
 def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.001):
+    print("Training model...")
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
@@ -100,7 +104,8 @@ def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.
         for images, labels in train_loader:
             optimizer.zero_grad()
             outputs = model(images)
-            loss = criterion(outputs, labels.unsqueeze(1))
+            labels = labels.unsqueeze(1)
+            loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
@@ -168,6 +173,7 @@ def check_np_arrays():
 
 
 def evaluate_model(model, data_loader, criterion):
+    print("Evaluating model...")
     model.eval()
     val_loss = 0.0
     all_labels = []
@@ -189,7 +195,7 @@ def evaluate_model(model, data_loader, criterion):
 
 
 def a_3_pipeline():
-    path_to_ds = "datasets/dataset_8"
+    path_to_ds = "datasets/dataset_9"
     train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=32)
     #test_data_loading(train_loader)
     #check_np_arrays()
