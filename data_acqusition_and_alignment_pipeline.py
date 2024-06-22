@@ -15,7 +15,6 @@ import rasterio.features
 
 
 def get_osm_building_data(city_name):
-    city_name_test = "Berlin_test"
     if city_name not in sources.cities.available:
         print(f"{city_name} not available.")
         sys.exit()
@@ -25,7 +24,7 @@ def get_osm_building_data(city_name):
         os.makedirs(building_and_sentinel_data_dir_name)
 
     building_and_sentinel_city_data_dir_name = \
-        f"{building_and_sentinel_data_dir_name}/{city_name_test}"
+        f"{building_and_sentinel_data_dir_name}/{city_name}"
     if not os.path.exists(building_and_sentinel_city_data_dir_name):
         os.makedirs(building_and_sentinel_city_data_dir_name)
 
@@ -47,7 +46,7 @@ def get_osm_building_data(city_name):
     buildings_in_city_boundaries = osm_buildings.get_buildings()
 
     print("Storing building data...")
-    path_to_building_data = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name_test}_buildings.pkl")
+    path_to_building_data = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_buildings.pkl")
 
     with open(path_to_building_data, 'wb') as f:
         pickle.dump(buildings_in_city_boundaries, f)
@@ -109,7 +108,6 @@ def plot_data(city_name, type): #plot relevant data
     
 
 def get_sentinel_image_data(temporal_extent, bands, city_name):
-    city_name_test = "Berlin_test"
     print("Connecting to backend...")
     connection = openeo.connect("https://openeo.dataspace.copernicus.eu/openeo/1.2").authenticate_oidc()
 
@@ -119,14 +117,16 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     max_longitude_point = city_boundary["geometry"].bounds[2]
     max_latitude_point = city_boundary["geometry"].bounds[3]
 
+    """
     spatial_extent_test_img = {"west":13.294333, "south":52.454927, \
                       "east":13.500205, "north":52.574409} 
-    
+    """
+
     spatial_extent = {"west":min_longitude_point, "south":min_latitude_point, \
                       "east":max_longitude_point, "north":max_latitude_point} 
 
     datacube = connection.load_collection("SENTINEL2_L2A", \
-            spatial_extent=spatial_extent_test_img, \
+            spatial_extent=spatial_extent, \
             temporal_extent=temporal_extent, \
             bands=bands
             )
@@ -134,8 +134,8 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     print("Downloading image data...")
     building_and_sentinel_data_dir_name = "building_and_sentinel_data"
     building_and_sentinel_city_data_dir_name = \
-    f"{building_and_sentinel_data_dir_name}/{city_name_test}"
-    path_to_image_data = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name_test}.tiff")
+    f"{building_and_sentinel_data_dir_name}/{city_name}"
+    path_to_image_data = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}.tiff")
 
     datacube.download(path_to_image_data)
 
@@ -166,12 +166,12 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     vnir_im = vnir_band_clipped_norm.astype(np.uint8)
 
     print("Writing image data to disk...")
-    satellite_data_rgb_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name_test}_rgb.png")
-    satellite_data_r_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name_test}_r.png")
-    satellite_data_g_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name_test}_g.png")
-    satellite_data_b_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name_test}_b.png")
-    satellite_data_irb_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name_test}_irb.png")
-    satellite_data_vnir_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name_test}_vnir.png")
+    satellite_data_rgb_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_rgb.png")
+    satellite_data_r_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_r.png")
+    satellite_data_g_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_g.png")
+    satellite_data_b_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_b.png")
+    satellite_data_irb_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_irb.png")
+    satellite_data_vnir_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_vnir.png")
 
     plt.imsave(satellite_data_rgb_fp, rgb_im)
     plt.imsave(satellite_data_r_fp, r_im, cmap='gray')
@@ -182,20 +182,19 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
 
 
 def build_stacked_im(city_name, label_im, rgb_im):
-    city_name_test = "Berlin_test"
-    path_to_city_data = os.path.join("building_and_sentinel_data", city_name_test)
+    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
     mask = label_im == 1
     stacked_im = np.copy(rgb_im)
     stacked_im[mask] = [0, 0, 255] #set blue
 
-    path_to_stacked_image = os.path.join(path_to_city_data, f"{city_name_test}_stacked.png")
+    path_to_stacked_image = os.path.join(path_to_city_data, f"{city_name}_stacked.png")
     plt.imsave(path_to_stacked_image, stacked_im)
 
     buildings_im = np.zeros((rgb_im.shape[0], rgb_im.shape[1], 4), dtype=np.uint8)
     buildings_im[mask, 3] = 255
     buildings_im[mask, :3] = [0, 0, 255]
 
-    path_to_buildings_image = os.path.join(path_to_city_data, f"{city_name_test}_buildings.png")
+    path_to_buildings_image = os.path.join(path_to_city_data, f"{city_name}_buildings.png")
     plt.imsave(path_to_buildings_image, buildings_im)
 
 def extract_coordinates(geometry):
@@ -221,13 +220,12 @@ def coords_to_rowcol(coords, transformer):
 
 
 def label_gen(city_name):
-    city_name_test = "Berlin_test"
-    path_to_city_data = os.path.join("building_and_sentinel_data", city_name_test)
+    path_to_city_data = os.path.join("building_and_sentinel_data", city_name)
 
-    path_to_image_data = os.path.join(path_to_city_data, f"{city_name_test}.tiff")
+    path_to_image_data = os.path.join(path_to_city_data, f"{city_name}.tiff")
     image_data = rasterio.open(path_to_image_data)
 
-    path_to_building_data = os.path.join(path_to_city_data, f"{city_name_test}_buildings.pkl")
+    path_to_building_data = os.path.join(path_to_city_data, f"{city_name}_buildings.pkl")
     buildings_data = None
     try:
         with open(path_to_building_data, 'rb') as f:
@@ -242,7 +240,7 @@ def label_gen(city_name):
     projected_building_data['coords'] = projected_building_data['geometry'].apply(extract_coordinates)
     projected_building_data['row_col'] = projected_building_data['coords'].apply(lambda coords: coords_to_rowcol(coords, transformer))
 
-    path_to_rgb_image = os.path.join(path_to_city_data, f"{city_name_test}_rgb.png")
+    path_to_rgb_image = os.path.join(path_to_city_data, f"{city_name}_rgb.png")
     rgb_im = Image.open(path_to_rgb_image).convert('RGB')
     rgb_im = np.array(rgb_im)
 
@@ -265,12 +263,12 @@ def label_gen(city_name):
 def a_1_pipeline(city_name):
     get_osm_building_data(city_name)
 
-    temporal_extent=["2024-05-15", "2024-05-16"]
+    temporal_extent=["2024-05-14", "2024-05-15"]
     bands=["B04", "B03", "B02", "B08"]
     get_sentinel_image_data(temporal_extent, bands, city_name)
 
     label_gen(city_name)
 
-city_name = "Berlin"
+city_name = "Rostock"
 a_1_pipeline(city_name)
 #plot_data(city_name, "buildings")

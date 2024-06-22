@@ -10,6 +10,7 @@ import os
 import sys
 from tqdm import tqdm
 from datetime import datetime
+from PIL import Image
 
 class ImageDataset(Dataset):
     def __init__(self, path_to_ds, mode):
@@ -113,7 +114,7 @@ def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.
 def save_model(model, num_epochs, learning_rate, this_run_dir_path):
     current_datetime = datetime.now()
     formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-    model_name = f"ds{path_to_ds[-1]}_ep{num_epochs}_lr{learning_rate}_bs{batch_size}_{formatted_datetime}.pth"
+    model_name = f"baseline_ds{path_to_ds[-1]}_ep{num_epochs}_lr{learning_rate}_bs{batch_size}_{formatted_datetime}.pth"
     path_to_model = os.path.join(this_run_dir_path, model_name)
     torch.save(model, path_to_model)
 
@@ -138,12 +139,67 @@ def evaluate_model(model, data_loader, criterion):
     
     return loss, acc
 
+def test_model(model_path):
+    model = torch.load(model_path)
+    path_to_label_image = "building_and_sentinel_data/Berlin_test/Berlin_test_buildings.png"
+    path_to_rgb_image = "building_and_sentinel_data/Berlin_test/Berlin_test_rgb.png"
+    label_im = Image.open(path_to_label_image).convert('RGB')
+    label_im = np.array(label_im)
+
+    building_mask = (label_im == [0, 0, 255]).all(axis=2) 
+    label_matrix = np.zeros((label_im.shape[0], label_im.shape[1]), dtype=np.uint8)
+    label_matrix[building_mask] = 1
+
+    rgb_im = Image.open(path_to_rgb_image).convert('RGB')
+    rgb_im = np.array(rgb_im)
+    rgb_im = rgb_im.astype(np.float32) / 255.0
+    rgb_im = np.expand_dims(rgb_im, axis=0)
+    rgb_im = np.transpose(rgb_im, (0, 3, 1, 2))
+
+    inp = torch.tensor(rgb_im)
+
+    pred = model(inp)
+
+    pred_matrix = (pred > 0.5).float()
+    pred_matrix = pred_matrix.numpy().astype(np.uint8)[0, 0]
+
+    acc = custom_eval(label_matrix, pred_matrix)
+
+    print(f"{acc}%")
+
+    plt.figure(figsize=(10, 5))
+    
+    # Plot the second image
+    plt.subplot(1, 2, 1)
+    plt.imshow(label_matrix, cmap='gray', vmin=0, vmax=1) 
+    plt.title('labels')
+    plt.axis('off')  # Optional: turn off axis labels
+
+    # Plot the second image
+    plt.subplot(1, 2, 2)
+    plt.imshow(pred_matrix, cmap='gray', vmin=0, vmax=1) 
+    plt.title('prediction')
+    plt.axis('off')  # Optional: turn off axis labels
+
+    plt.show()
+
+    return
+
+def custom_eval(label_matrix, prediction_matrix):
+    diff = abs(label_matrix - prediction_matrix)
+    s = np.sum(diff)
+    total_pixels = label_matrix.size
+    return 100 - (total_pixels / s * 100)
+
+
+
 
 def a_3_pipeline():
     global path_to_ds
     path_to_ds = "datasets/dataset_9"
     global batch_size
     batch_size = 32
+    """
     train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
     #test_data_loading(train_loader)
     #check_np_arrays()
@@ -153,5 +209,8 @@ def a_3_pipeline():
     test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss())
     print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
     #TODO test on test data specified in assignment sheet
+    """
+    model_path = "models/run_1/ds9_ep5_lr0.005_bs32_2024-06-21_19-53-19.pth"
+    test_model(model_path)
 
 a_3_pipeline()
