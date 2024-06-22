@@ -85,6 +85,7 @@ def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.
         else:
             run_ind += 1
 
+    global this_run_dir_path
     this_run_dir_path = os.path.join(models_dir_name, this_run_dir_name)
     os.makedirs(this_run_dir_path)
 
@@ -92,6 +93,11 @@ def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
+    training_loss_ls =  []
+    val_loss_ls = []
+    val_acc_ls = []
+    cont_training_loss_ls = []
+
     for epoch in tqdm(range(num_epochs)):
         model.train()
         running_loss = 0.0
@@ -103,13 +109,39 @@ def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
+            cont_training_loss_ls.append(loss.item())
         
         val_loss, val_acc = evaluate_model(model, val_loader, criterion)
+        val_loss_ls.append(val_loss)
+        val_acc_ls.append(val_acc)
+        training_loss_ls.append(running_loss)
         print(f'Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(train_loader)}, Val Loss: {val_loss}, Val Acc: {val_acc}')
     
+    print("Saving plots...")
+    save_plot(cont_training_loss_ls, "cont_training_loss", this_run_dir_path)
+    save_plot(val_loss_ls, "val_loss", this_run_dir_path)
+    save_plot(val_acc_ls, "val_acc", this_run_dir_path)
+    save_plot(training_loss_ls, "training_loss", this_run_dir_path)
     print("Saving model...")
     save_model(model, num_epochs, learning_rate, this_run_dir_path)
     return model
+
+def save_plot(data, type, this_run_dir_path):
+    plt.figure(figsize=(10, 5))
+    if type == "cont_training_loss":
+        plt.xlabel('Training steps')
+        plt.title(f'{type} Over Training Steps')
+    else:
+        plt.xlabel('Epochs')
+        plt.title(f'{type} Over Epochs')
+
+    plt.plot(data, label=type)
+    plt.ylabel(type)
+    plt.legend()
+    plt.grid(True)
+    path_to_plot = os.path.join(this_run_dir_path, f'{type}_plot.png')
+    plt.savefig(path_to_plot)
+    plt.close()
 
 def save_model(model, num_epochs, learning_rate, this_run_dir_path):
     current_datetime = datetime.now()
@@ -118,7 +150,7 @@ def save_model(model, num_epochs, learning_rate, this_run_dir_path):
     path_to_model = os.path.join(this_run_dir_path, model_name)
     torch.save(model, path_to_model)
 
-def evaluate_model(model, data_loader, criterion):
+def evaluate_model(model, data_loader, criterion, save_result=False, result_path=None):
     print("Evaluating model...")
     model.eval()
     loss = 0.0
@@ -131,11 +163,17 @@ def evaluate_model(model, data_loader, criterion):
             loss = criterion(outputs, labels.unsqueeze(1))
             loss += loss.item()
             preds = (outputs > 0.5).float()
-            all_labels.extend(labels.cpu().numpy().flatten())
-            all_preds.extend(preds.cpu().numpy().flatten())
+            all_labels.extend(labels.numpy().flatten())
+            all_preds.extend(preds.numpy().flatten())
     
     loss /= len(data_loader)
     acc = accuracy_score(np.array(all_labels), np.array(all_preds))
+
+    if save_result:
+        with open(result_path, 'w') as f:
+            f.write("Loss and accuracy on test data:\n")
+            f.write(f'Loss: {loss}\n')
+            f.write(f'Accuracy: {acc}\n')
     
     return loss, acc
 
@@ -147,7 +185,7 @@ def test_model(model_path):
     label_im = np.array(label_im)
 
     building_mask = (label_im == [0, 0, 255]).all(axis=2) 
-    label_matrix = np.zeros((label_im.shape[0], label_im.shape[1]), dtype=np.uint8)
+    label_matrix = np.zeros((label_im.shape[0], label_im.shape[1]), dtype=np.int8)
     label_matrix[building_mask] = 1
 
     rgb_im = Image.open(path_to_rgb_image).convert('RGB')
@@ -161,11 +199,13 @@ def test_model(model_path):
     pred = model(inp)
 
     pred_matrix = (pred > 0.5).float()
-    pred_matrix = pred_matrix.numpy().astype(np.uint8)[0, 0]
+    pred_matrix = pred_matrix.numpy().astype(np.int8)[0, 0]
 
-    acc = custom_eval(label_matrix, pred_matrix)
+    acc = custom_acc_eval(label_matrix, pred_matrix)
+    acc2 = accuracy_score(label_matrix.flatten(), pred_matrix.flatten())
 
-    print(f"{acc}%")
+    print(f"{acc*100}%")
+    print(f"{acc2*100}%")
 
     plt.figure(figsize=(10, 5))
     
@@ -183,15 +223,12 @@ def test_model(model_path):
 
     plt.show()
 
-    return
-
-def custom_eval(label_matrix, prediction_matrix):
+def custom_acc_eval(label_matrix, prediction_matrix):
     diff = abs(label_matrix - prediction_matrix)
-    s = np.sum(diff)
-    total_pixels = label_matrix.size
-    return 100 - (total_pixels / s * 100)
-
-
+    wrong_preds = np.sum(diff)
+    total_preds = label_matrix.size
+    correct_preds = total_preds - wrong_preds
+    return correct_preds / total_preds
 
 
 def a_3_pipeline():
@@ -199,18 +236,15 @@ def a_3_pipeline():
     path_to_ds = "datasets/dataset_9"
     global batch_size
     batch_size = 32
-    """
-    train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
-    #test_data_loading(train_loader)
-    #check_np_arrays()
-    model = PixelClassifier()
 
-    trained_model = train_model(model, train_loader, val_loader, num_epochs=5, learning_rate=0.005)
-    test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss())
-    print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
-    #TODO test on test data specified in assignment sheet
-    """
-    model_path = "models/run_1/ds9_ep5_lr0.005_bs32_2024-06-21_19-53-19.pth"
+    #train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
+    model = PixelClassifier()
+    #trained_model = train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.005)
+    #result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
+    #test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss(), save_result=True, result_path=result_path)
+    #print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
+
+    model_path = "models/run_3/baseline_ds9_ep10_lr0.005_bs32_2024-06-22_21-25-37.pth"
     test_model(model_path)
 
 a_3_pipeline()
