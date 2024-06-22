@@ -106,14 +106,14 @@ def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.
         val_loss, val_acc = evaluate_model(model, val_loader, criterion)
         print(f'Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(train_loader)}, Val Loss: {val_loss}, Val Acc: {val_acc}')
     
+    print("Saving model...")
     save_model(model, num_epochs, learning_rate, this_run_dir_path)
     return model
 
 def save_model(model, num_epochs, learning_rate, this_run_dir_path):
     current_datetime = datetime.now()
     formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-    model_name = f"ds{path_to_ds[-1]}_ep{num_epochs}_lr{learning_rate}\
-        _bs{batch_size}_{formatted_datetime}.pth"
+    model_name = f"ds{path_to_ds[-1]}_ep{num_epochs}_lr{learning_rate}_bs{batch_size}_{formatted_datetime}.pth"
     path_to_model = os.path.join(this_run_dir_path, model_name)
     torch.save(model, path_to_model)
 
@@ -149,8 +149,9 @@ def a_3_pipeline():
     #check_np_arrays()
     model = PixelClassifier()
 
-    trained_model = train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.001)
+    trained_model = train_model(model, train_loader, val_loader, num_epochs=5, learning_rate=0.005)
     test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss())
     print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
+    #TODO test on test data specified in assignment sheet
 
 a_3_pipeline()
