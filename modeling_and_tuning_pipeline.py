@@ -11,6 +11,7 @@ import sys
 from tqdm import tqdm
 from datetime import datetime
 from PIL import Image
+import optuna
 from unet_parts import *
 
 class ImageDataset(Dataset):
@@ -39,6 +40,7 @@ class ImageDataset(Dataset):
         label = self.labels[ind]
         return image, label
 
+"""
 class PixelClassifier(nn.Module):
     def __init__(self):
         super(PixelClassifier, self).__init__()
@@ -57,7 +59,35 @@ class PixelClassifier(nn.Module):
         x = self.conv4(x)
         x = torch.sigmoid(x)
         return x
-    
+"""
+
+class PixelClassifier(nn.Module):
+    def __init__(self, in_channels=3, out_channels=1, num_layers=4, base_channels=32):
+        super(PixelClassifier, self).__init__()
+        self.num_layers = num_layers
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+
+        self.conv_layers = nn.ModuleList()
+        for layer_idx in range(num_layers):
+            if layer_idx == 0:
+                self.conv_layers.append(nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1))
+            else:
+                self.conv_layers.append(nn.Conv2d(base_channels * (2**(layer_idx-1)), 
+                                                  base_channels * (2**layer_idx), 
+                                                  kernel_size=3, padding=1))
+                
+        self.conv_out = nn.Conv2d(base_channels * (2**(num_layers-1)), out_channels, kernel_size=1)
+
+    def forward(self, x):
+        # Forward pass through convolutional layers
+        for layer_idx in range(self.num_layers):
+            x = self.conv_layers[layer_idx](x)
+            x = F.relu(x)
+        
+        x = self.conv_out(x)
+        x = torch.sigmoid(x)
+        return x
 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=True):
@@ -104,7 +134,7 @@ def get_dataloaders(path_to_ds, batch_size=32):
     
     return train_loader, val_loader, test_loader
 
-def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.001):
+def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=0.001):
     models_dir_name = "models"
     if not os.path.exists(models_dir_name):
         os.makedirs(models_dir_name)
@@ -124,8 +154,8 @@ def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.
     os.makedirs(this_run_dir_path)
 
     print("Training model...")
-    criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    #criterion = nn.BCELoss()
+    #optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     
     training_loss_ls =  []
     val_loss_ls = []
@@ -148,7 +178,7 @@ def train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.
         val_loss, val_acc = evaluate_model(model, val_loader, criterion)
         val_loss_ls.append(val_loss)
         val_acc_ls.append(val_acc)
-        training_loss_ls.append(running_loss)
+        training_loss_ls.append(running_loss/len(train_loader))
         print(f'Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(train_loader)}, Val Loss: {val_loss}, Val Acc: {val_acc}')
     
     print("Saving plots...")
@@ -269,6 +299,48 @@ def custom_acc_eval(label_matrix, prediction_matrix):
     correct_preds = total_preds - wrong_preds
     return correct_preds / total_preds
 
+def objective(trial):
+    # Define parameters to tune
+    hidden_dim = trial.suggest_int('hidden_dim', 16, 256, log=True)
+    learning_rate = trial.suggest_loguniform('learning_rate', 1e-5, 1e-1)
+    batch_size = trial.suggest_categorical('batch_size', [32, 64, 128])
+    
+    # Load dataset and prepare data loaders
+    train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
+    
+    # Initialize model and optimizer
+    model = PixelClassifier(input_dim=28*28, hidden_dim=hidden_dim, output_dim=10)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    criterion = nn.CrossEntropyLoss()
+    
+    trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=0.005)
+    
+    # Evaluation on validation set
+    trained_model.eval()
+    val_loss = 0.0
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for images, labels in val_loader:
+            outputs = trained_model(images.view(-1, 28*28))
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+            val_loss += criterion(outputs, labels).item()
+    
+    accuracy = correct / total
+    
+    # Report validation accuracy as the objective to minimize (negative of accuracy for maximize)
+    return 1 - accuracy
+
+def hyper_param_tuning():
+    study = optuna.create_study(direction='maximize')
+    study.optimize(objective, n_trials=100)
+
+    # Get the best hyperparameters
+    best_params = study.best_params
+    print("Best hyperparameters:", best_params)
+
 
 def a_3_pipeline(train=True, model="baseline", ds="dataset_9", model_path="None"):
     global path_to_ds
@@ -284,7 +356,11 @@ def a_3_pipeline(train=True, model="baseline", ds="dataset_9", model_path="None"
             model = PixelClassifier()
         else:
             model = UNet(n_channels=3, n_classes=1, bilinear=True)
-        trained_model = train_model(model, train_loader, val_loader, num_epochs=1, learning_rate=0.005)
+
+        learning_rate = 0.005
+        criterion = nn.BCELoss()
+        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+        trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=learning_rate)
         result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
         test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss(), save_result=True, result_path=result_path)
         print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
@@ -292,4 +368,6 @@ def a_3_pipeline(train=True, model="baseline", ds="dataset_9", model_path="None"
         #model_path = "models/run_3/baseline_ds9_ep10_lr0.005_bs32_2024-06-22_21-25-37.pth"
         test_model(model_path)
 
-a_3_pipeline(train=True, model="baseline")
+a_3_pipeline(train=True, model="unet")
+
+#TODO hyperparam tuning of PixelClassifier
