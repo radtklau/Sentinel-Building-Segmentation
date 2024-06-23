@@ -11,6 +11,7 @@ import sys
 from tqdm import tqdm
 from datetime import datetime
 from PIL import Image
+from unet_parts import *
 
 class ImageDataset(Dataset):
     def __init__(self, path_to_ds, mode):
@@ -57,84 +58,38 @@ class PixelClassifier(nn.Module):
         x = torch.sigmoid(x)
         return x
     
-class SegNet(nn.Module):
-    def __init__(self):
-        super(SegNet, self).__init__()
-        
-        # Encoder layers
-        self.encoder_conv_00 = nn.Conv2d(3, 64, kernel_size=3, padding=1)
-        self.encoder_conv_01 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-        
-        self.encoder_conv_10 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.encoder_conv_11 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
-        
-        self.encoder_conv_20 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
-        self.encoder_conv_21 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
-        
-        self.encoder_conv_30 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
-        self.encoder_conv_31 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        
-        self.encoder_conv_40 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.encoder_conv_41 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        
-        self.pool = nn.MaxPool2d(2, 2, return_indices=True)
-        
-        # Decoder layers
-        self.decoder_conv_00 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.decoder_conv_01 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        
-        self.decoder_conv_10 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        self.decoder_conv_11 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
-        
-        self.decoder_conv_20 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
-        self.decoder_conv_21 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
-        
-        self.decoder_conv_30 = nn.Conv2d(256, 128, kernel_size=3, padding=1)
-        self.decoder_conv_31 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
-        
-        self.decoder_conv_40 = nn.Conv2d(128, 64, kernel_size=3, padding=1)
-        self.decoder_conv_41 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-        
-        self.unpool = nn.MaxUnpool2d(2, 2)
-        
-        self.final_conv = nn.Conv2d(64, 1, kernel_size=1)
-    
+
+class UNet(nn.Module):
+    def __init__(self, n_channels, n_classes, bilinear=True):
+        super(UNet, self).__init__()
+        self.n_channels = n_channels
+        self.n_classes = n_classes
+        self.bilinear = bilinear
+
+        self.inc = DoubleConv(n_channels, 64)
+        self.down1 = Down(64, 128)
+        self.down2 = Down(128, 256)
+        self.down3 = Down(256, 512)
+        factor = 2 if bilinear else 1
+        self.down4 = Down(512, 1024 // factor)
+        self.up1 = Up(1024, 512 // factor, bilinear)
+        self.up2 = Up(512, 256 // factor, bilinear)
+        self.up3 = Up(256, 128 // factor, bilinear)
+        self.up4 = Up(128, 64, bilinear)
+        self.outc = OutConv(64, n_classes)
+
     def forward(self, x):
-        # Encoder
-        x = F.relu(self.encoder_conv_00(x))
-        x, indices_1 = self.pool(F.relu(self.encoder_conv_01(x)))
-        
-        x = F.relu(self.encoder_conv_10(x))
-        x, indices_2 = self.pool(F.relu(self.encoder_conv_11(x)))
-        
-        x = F.relu(self.encoder_conv_20(x))
-        x, indices_3 = self.pool(F.relu(self.encoder_conv_21(x)))
-        
-        x = F.relu(self.encoder_conv_30(x))
-        x, indices_4 = self.pool(F.relu(self.encoder_conv_31(x)))
-        
-        x = F.relu(self.encoder_conv_40(x))
-        x, indices_5 = self.pool(F.relu(self.encoder_conv_41(x)))
-        
-        # Decoder
-        x = self.unpool(x, indices_5)
-        x = F.relu(self.decoder_conv_00(x))
-        x = self.unpool(F.relu(self.decoder_conv_01(x)), indices_4)
-        
-        x = F.relu(self.decoder_conv_10(x))
-        x = self.unpool(F.relu(self.decoder_conv_11(x)), indices_3)
-        
-        x = F.relu(self.decoder_conv_20(x))
-        x = self.unpool(F.relu(self.decoder_conv_21(x)), indices_2)
-        
-        x = F.relu(self.decoder_conv_30(x))
-        x = self.unpool(F.relu(self.decoder_conv_31(x)), indices_1)
-        
-        x = F.relu(self.decoder_conv_40(x))
-        x = F.relu(self.decoder_conv_41(x))
-        
-        x = self.final_conv(x)
-        return torch.sigmoid(x)
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        x = self.up1(x5, x4)
+        x = self.up2(x, x3)
+        x = self.up3(x, x2)
+        x = self.up4(x, x1)
+        logits = self.outc(x)
+        return torch.sigmoid(logits)
 
     
 def get_dataloaders(path_to_ds, batch_size=32):
@@ -225,7 +180,8 @@ def save_plot(data, type, this_run_dir_path):
 def save_model(model, num_epochs, learning_rate, this_run_dir_path):
     current_datetime = datetime.now()
     formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
-    model_name = f"baseline_ds{path_to_ds[-1]}_ep{num_epochs}_lr{learning_rate}_bs{batch_size}_{formatted_datetime}.pth"
+    global model_name
+    model_name = f"{model_name}_ds{path_to_ds[-1]}_ep{num_epochs}_lr{learning_rate}_bs{batch_size}_{formatted_datetime}.pth"
     path_to_model = os.path.join(this_run_dir_path, model_name)
     torch.save(model, path_to_model)
 
@@ -314,20 +270,26 @@ def custom_acc_eval(label_matrix, prediction_matrix):
     return correct_preds / total_preds
 
 
-def a_3_pipeline():
+def a_3_pipeline(train=True, model="baseline", ds="dataset_9", model_path="None"):
     global path_to_ds
-    path_to_ds = "datasets/dataset_9"
+    path_to_ds = f"datasets/{ds}"
     global batch_size
     batch_size = 32
+    global model_name
+    model_name = model
 
-    #train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
-    model = PixelClassifier()
-    #trained_model = train_model(model, train_loader, val_loader, num_epochs=10, learning_rate=0.005)
-    #result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
-    #test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss(), save_result=True, result_path=result_path)
-    #print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
+    if train:
+        train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
+        if model_name == "baseline":
+            model = PixelClassifier()
+        else:
+            model = UNet(n_channels=3, n_classes=1, bilinear=True)
+        trained_model = train_model(model, train_loader, val_loader, num_epochs=1, learning_rate=0.005)
+        result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
+        test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss(), save_result=True, result_path=result_path)
+        print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
+    else:
+        #model_path = "models/run_3/baseline_ds9_ep10_lr0.005_bs32_2024-06-22_21-25-37.pth"
+        test_model(model_path)
 
-    model_path = "models/run_3/baseline_ds9_ep10_lr0.005_bs32_2024-06-22_21-25-37.pth"
-    test_model(model_path)
-
-a_3_pipeline()
+a_3_pipeline(train=True, model="baseline")
