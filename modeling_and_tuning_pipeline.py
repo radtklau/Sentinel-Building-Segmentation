@@ -223,6 +223,12 @@ def test_model(model_path):
 
     plt.show()
 
+    path_to_labels = os.path.join(os.path.dirname(model_path), "labels_test_img.png")
+    plt.imsave(path_to_labels, label_matrix, cmap='gray')  # Save the first image
+
+    path_to_preds = os.path.join(os.path.dirname(model_path), "preds_test_img.png")
+    plt.imsave(path_to_preds, pred_matrix, cmap='gray')  # Save the second image
+
 def custom_acc_eval(label_matrix, prediction_matrix):
     diff = abs(label_matrix - prediction_matrix)
     wrong_preds = np.sum(diff)
