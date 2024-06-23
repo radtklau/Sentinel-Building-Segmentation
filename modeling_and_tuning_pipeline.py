@@ -299,17 +299,18 @@ def custom_acc_eval(label_matrix, prediction_matrix):
     correct_preds = total_preds - wrong_preds
     return correct_preds / total_preds
 
-def objective(trial):
+def objective(trial): #TODO
     # Define parameters to tune
     hidden_dim = trial.suggest_int('hidden_dim', 16, 256, log=True)
     learning_rate = trial.suggest_loguniform('learning_rate', 1e-5, 1e-1)
     batch_size = trial.suggest_categorical('batch_size', [32, 64, 128])
+    #num_layers = trial.suggest_categorical('')
     
     # Load dataset and prepare data loaders
     train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
     
     # Initialize model and optimizer
-    model = PixelClassifier(input_dim=28*28, hidden_dim=hidden_dim, output_dim=10)
+    model = PixelClassifier(in_channels=3, out_channels=1, num_layers=4, base_channels=32)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
     
