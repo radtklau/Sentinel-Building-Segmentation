@@ -56,6 +56,85 @@ class PixelClassifier(nn.Module):
         x = self.conv4(x)
         x = torch.sigmoid(x)
         return x
+    
+class SegNet(nn.Module):
+    def __init__(self):
+        super(SegNet, self).__init__()
+        
+        # Encoder layers
+        self.encoder_conv_00 = nn.Conv2d(3, 64, kernel_size=3, padding=1)
+        self.encoder_conv_01 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        
+        self.encoder_conv_10 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.encoder_conv_11 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        
+        self.encoder_conv_20 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+        self.encoder_conv_21 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+        
+        self.encoder_conv_30 = nn.Conv2d(256, 512, kernel_size=3, padding=1)
+        self.encoder_conv_31 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        
+        self.encoder_conv_40 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.encoder_conv_41 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        
+        self.pool = nn.MaxPool2d(2, 2, return_indices=True)
+        
+        # Decoder layers
+        self.decoder_conv_00 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.decoder_conv_01 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        
+        self.decoder_conv_10 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        self.decoder_conv_11 = nn.Conv2d(512, 512, kernel_size=3, padding=1)
+        
+        self.decoder_conv_20 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
+        self.decoder_conv_21 = nn.Conv2d(256, 256, kernel_size=3, padding=1)
+        
+        self.decoder_conv_30 = nn.Conv2d(256, 128, kernel_size=3, padding=1)
+        self.decoder_conv_31 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        
+        self.decoder_conv_40 = nn.Conv2d(128, 64, kernel_size=3, padding=1)
+        self.decoder_conv_41 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        
+        self.unpool = nn.MaxUnpool2d(2, 2)
+        
+        self.final_conv = nn.Conv2d(64, 1, kernel_size=1)
+    
+    def forward(self, x):
+        # Encoder
+        x = F.relu(self.encoder_conv_00(x))
+        x, indices_1 = self.pool(F.relu(self.encoder_conv_01(x)))
+        
+        x = F.relu(self.encoder_conv_10(x))
+        x, indices_2 = self.pool(F.relu(self.encoder_conv_11(x)))
+        
+        x = F.relu(self.encoder_conv_20(x))
+        x, indices_3 = self.pool(F.relu(self.encoder_conv_21(x)))
+        
+        x = F.relu(self.encoder_conv_30(x))
+        x, indices_4 = self.pool(F.relu(self.encoder_conv_31(x)))
+        
+        x = F.relu(self.encoder_conv_40(x))
+        x, indices_5 = self.pool(F.relu(self.encoder_conv_41(x)))
+        
+        # Decoder
+        x = self.unpool(x, indices_5)
+        x = F.relu(self.decoder_conv_00(x))
+        x = self.unpool(F.relu(self.decoder_conv_01(x)), indices_4)
+        
+        x = F.relu(self.decoder_conv_10(x))
+        x = self.unpool(F.relu(self.decoder_conv_11(x)), indices_3)
+        
+        x = F.relu(self.decoder_conv_20(x))
+        x = self.unpool(F.relu(self.decoder_conv_21(x)), indices_2)
+        
+        x = F.relu(self.decoder_conv_30(x))
+        x = self.unpool(F.relu(self.decoder_conv_31(x)), indices_1)
+        
+        x = F.relu(self.decoder_conv_40(x))
+        x = F.relu(self.decoder_conv_41(x))
+        
+        x = self.final_conv(x)
+        return torch.sigmoid(x)
 
     
 def get_dataloaders(path_to_ds, batch_size=32):
@@ -209,17 +288,15 @@ def test_model(model_path):
 
     plt.figure(figsize=(10, 5))
     
-    # Plot the second image
     plt.subplot(1, 2, 1)
     plt.imshow(label_matrix, cmap='gray', vmin=0, vmax=1) 
     plt.title('labels')
-    plt.axis('off')  # Optional: turn off axis labels
+    plt.axis('off')
 
-    # Plot the second image
     plt.subplot(1, 2, 2)
     plt.imshow(pred_matrix, cmap='gray', vmin=0, vmax=1) 
     plt.title('prediction')
-    plt.axis('off')  # Optional: turn off axis labels
+    plt.axis('off')
 
     plt.show()
 

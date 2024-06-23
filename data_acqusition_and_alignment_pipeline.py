@@ -119,7 +119,7 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
 
     """
     spatial_extent_test_img = {"west":13.294333, "south":52.454927, \
-                        "east":13.500205, "north":52.574409} 
+                    "east":13.500205, "north":52.574409} 
     """
 
     spatial_extent = {"west":min_longitude_point, "south":min_latitude_point, \
@@ -271,5 +271,4 @@ def a_1_pipeline(city_name):
 
 city_name = "Rostock"
 a_1_pipeline(city_name)
-
 #plot_data(city_name, "buildings")
