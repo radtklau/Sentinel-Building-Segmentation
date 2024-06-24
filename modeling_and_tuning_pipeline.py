@@ -242,7 +242,7 @@ def evaluate_model(model, data_loader, criterion, save_result=False, result_path
     
     return loss, acc
 
-def test_model(model_path):
+def test_model(model_path): #test model on test image
     model = torch.load(model_path)
     path_to_label_image = "building_and_sentinel_data/Berlin_test/Berlin_test_buildings.png"
     path_to_rgb_image = "building_and_sentinel_data/Berlin_test/Berlin_test_rgb.png"
@@ -299,51 +299,58 @@ def custom_acc_eval(label_matrix, prediction_matrix):
     correct_preds = total_preds - wrong_preds
     return correct_preds / total_preds
 
-def objective(trial): #TODO
+def objective(trial):
     # Define parameters to tune
-    hidden_dim = trial.suggest_int('hidden_dim', 16, 256, log=True)
+    #hidden_dim = trial.suggest_int('hidden_dim', 16, 256, log=True)
     learning_rate = trial.suggest_loguniform('learning_rate', 1e-5, 1e-1)
     batch_size = trial.suggest_categorical('batch_size', [32, 64, 128])
-    #num_layers = trial.suggest_categorical('')
+    num_layers = trial.suggest_int('num_layers', 1, 10)
     
     # Load dataset and prepare data loaders
     train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
     
     # Initialize model and optimizer
-    model = PixelClassifier(in_channels=3, out_channels=1, num_layers=4, base_channels=32)
+    model = PixelClassifier(in_channels=3, out_channels=1, num_layers=num_layers, base_channels=32)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
     
-    trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=0.005)
+    trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=learning_rate)
     
-    # Evaluation on validation set
-    trained_model.eval()
-    val_loss = 0.0
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for images, labels in val_loader:
-            outputs = trained_model(images.view(-1, 28*28))
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-            val_loss += criterion(outputs, labels).item()
-    
-    accuracy = correct / total
+    loss, acc = evaluate_model(trained_model, val_loader, criterion) #eval model on val data
     
     # Report validation accuracy as the objective to minimize (negative of accuracy for maximize)
-    return 1 - accuracy
+    return acc
 
-def hyper_param_tuning():
+def hyperparam_tuning():
+    hyper_param_dir_name = "hyperparams"
+    if not os.path.exists(hyper_param_dir_name):
+        os.makedirs(hyper_param_dir_name)
+
+    run_ind = 0
+    this_run_dir_name = ""
+    while True:
+        path_to_run = f"hyperparams/run_{run_ind}"
+        if not os.path.exists(path_to_run):
+            this_run_dir_name = f"run_{run_ind}"
+            break
+        else:
+            run_ind += 1
+
+    this_run_dir_path = os.path.join(hyper_param_dir_name, this_run_dir_name)
+
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=100)
 
     # Get the best hyperparameters
-    best_params = study.best_params
-    print("Best hyperparameters:", best_params)
+    best_hyperparams = study.best_params
+    print("Best hyperparameters:", best_hyperparams)
 
+    path_to_hyper_params = os.path.join(this_run_dir_path, f'best_pixel_cl_params.txt')
+    with open(path_to_hyper_params, 'w') as f:
+        f.write("Best hyperparams for pixel classifier:\n")
+        f.write(f'{best_hyperparams}\n')
 
-def a_3_pipeline(train=True, model="baseline", ds="dataset_9", model_path="None"):
+def a_3_pipeline(mode, model="baseline", ds="dataset_9", model_path="None"):
     global path_to_ds
     path_to_ds = f"datasets/{ds}"
     global batch_size
@@ -351,7 +358,7 @@ def a_3_pipeline(train=True, model="baseline", ds="dataset_9", model_path="None"
     global model_name
     model_name = model
 
-    if train:
+    if mode == "train":
         train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
         if model_name == "baseline":
             model = PixelClassifier()
@@ -365,9 +372,11 @@ def a_3_pipeline(train=True, model="baseline", ds="dataset_9", model_path="None"
         result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
         test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss(), save_result=True, result_path=result_path)
         print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
-    else:
+    elif mode == "test":
         #model_path = "models/run_3/baseline_ds9_ep10_lr0.005_bs32_2024-06-22_21-25-37.pth"
         test_model(model_path)
+    else: #hyperparam tuning
+        best_params = hyperparam_tuning()
 
 a_3_pipeline(train=True, model="unet")
 
