@@ -1,5 +1,4 @@
 city_osm_data/
-/denver
 *.shp
 *.tiff
 building_and_sentinel_data/
@@ -9,3 +8,5 @@ building_and_sentinel_data/
 datasets/
 models/
 hyperparams/
+*.txt
+*.pth
