@@ -134,7 +134,7 @@ def get_dataloaders(path_to_ds, batch_size=32):
     
     return train_loader, val_loader, test_loader
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=0.001):
+def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=0.001, store_results=True):
     models_dir_name = "models"
     if not os.path.exists(models_dir_name):
         os.makedirs(models_dir_name)
@@ -151,7 +151,8 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
 
     global this_run_dir_path
     this_run_dir_path = os.path.join(models_dir_name, this_run_dir_name)
-    os.makedirs(this_run_dir_path)
+    if store_results:
+        os.makedirs(this_run_dir_path)
 
     print("Training model...")
     #criterion = nn.BCELoss()
@@ -181,13 +182,14 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
         training_loss_ls.append(running_loss/len(train_loader))
         print(f'Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(train_loader)}, Val Loss: {val_loss}, Val Acc: {val_acc}')
     
-    print("Saving plots...")
-    save_plot(cont_training_loss_ls, "cont_training_loss", this_run_dir_path)
-    save_plot(val_loss_ls, "val_loss", this_run_dir_path)
-    save_plot(val_acc_ls, "val_acc", this_run_dir_path)
-    save_plot(training_loss_ls, "training_loss", this_run_dir_path)
-    print("Saving model...")
-    save_model(model, num_epochs, learning_rate, this_run_dir_path)
+    if store_results:
+        print("Saving plots...")
+        save_plot(cont_training_loss_ls, "cont_training_loss", this_run_dir_path)
+        save_plot(val_loss_ls, "val_loss", this_run_dir_path)
+        save_plot(val_acc_ls, "val_acc", this_run_dir_path)
+        save_plot(training_loss_ls, "training_loss", this_run_dir_path)
+        print("Saving model...")
+        save_model(model, num_epochs, learning_rate, this_run_dir_path)
     return model
 
 def save_plot(data, type, this_run_dir_path):
@@ -302,7 +304,7 @@ def custom_acc_eval(label_matrix, prediction_matrix):
 def objective(trial):
     # Define parameters to tune
     #hidden_dim = trial.suggest_int('hidden_dim', 16, 256, log=True)
-    learning_rate = trial.suggest_loguniform('learning_rate', 1e-5, 1e-1)
+    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-1, log=True)
     batch_size = trial.suggest_categorical('batch_size', [32, 64, 128])
     num_layers = trial.suggest_int('num_layers', 1, 10)
     
@@ -314,7 +316,7 @@ def objective(trial):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss()
     
-    trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=learning_rate)
+    trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=learning_rate, store_results=False)
     
     loss, acc = evaluate_model(trained_model, val_loader, criterion) #eval model on val data
     
@@ -376,8 +378,8 @@ def a_3_pipeline(mode, model="baseline", ds="dataset_9", model_path="None"):
         #model_path = "models/run_3/baseline_ds9_ep10_lr0.005_bs32_2024-06-22_21-25-37.pth"
         test_model(model_path)
     else: #hyperparam tuning
-        best_params = hyperparam_tuning()
+        hyperparam_tuning()
 
-a_3_pipeline(train=True, model="unet")
+a_3_pipeline(mode="tuning")
 
 #TODO hyperparam tuning of PixelClassifier
