@@ -1,10 +1,11 @@
-/city_osm_data
+/city_osm_data/
 /denver
 *.shp
 *.tiff
-/building_and_sentinel_data
+/building_and_sentinel_data/
 *.png
 *.pkl
 *.tiff
-/datasets
-/models
+/datasets/
+/models/
+/hyperparams/
