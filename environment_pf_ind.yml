@@ -1,0 +1,25 @@
+name: amls-project
+channels:
+  - defaults
+dependencies:
+  - geopandas
+  - pyrosm
+  - ipykernel
+  - tqdm
+  - pyogrio
+  - openeo
+  - imageio
+  - matplotlib
+  - rasterio
+  - seaborn
+  - netcdf4
+  - h5netcdf
+  - imp
+  - geopy
+  - scikit-image
+  - pytorch
+  - pytorch-cuda=11.8
+  - torchaudio
+  - torchvision
+  - optuna
+prefix: /home/radtklau/anaconda3/envs/amls-project
