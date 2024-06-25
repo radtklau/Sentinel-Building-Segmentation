@@ -13,9 +13,10 @@ from datetime import datetime
 from PIL import Image
 import optuna
 from unet_parts import *
+import albumentations as A
 
 class ImageDataset(Dataset):
-    def __init__(self, path_to_ds, mode, transform=None):
+    def __init__(self, path_to_ds, mode, transformation=None):
         if mode not in ["train", "test", "val"]:
             print("Invalid mode.")
             sys.exit()
@@ -32,7 +33,7 @@ class ImageDataset(Dataset):
         self.features = np.load(features_fp)
         self.labels = np.load(labels_fp)
 
-        self.transform = transform
+        self.transformation = transformation
 
     def __len__(self):
         return len(self.features)
@@ -41,8 +42,8 @@ class ImageDataset(Dataset):
         image = self.features[ind]
         label = self.labels[ind]
 
-        if self.transform:
-            augmented = self.transform(image=image, mask=label)
+        if self.transformation:
+            augmented = self.transformation(image=image, mask=label)
             image = augmented['image']
             label = augmented['mask']
 
@@ -130,11 +131,11 @@ class UNet(nn.Module):
         return torch.sigmoid(logits)
 
     
-def get_dataloaders(path_to_ds, batch_size=32):
+def get_dataloaders(path_to_ds, transformation=None, batch_size=32):
     print("Creating train, test and val datasets...")
-    train_dataset = ImageDataset(path_to_ds, 'train')
-    val_dataset = ImageDataset(path_to_ds, 'val')
-    test_dataset = ImageDataset(path_to_ds, 'test')
+    train_dataset = ImageDataset(path_to_ds, 'train', transformation)
+    val_dataset = ImageDataset(path_to_ds, 'val', transformation)
+    test_dataset = ImageDataset(path_to_ds, 'test', transformation)
     
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -360,7 +361,18 @@ def hyperparam_tuning():
         f.write("Best hyperparams for pixel classifier:\n")
         f.write(f'{best_hyperparams}\n')
 
-def a_3_pipeline(mode, model="baseline", ds="dataset_9", model_path="None"):
+def get_transformation(): #TODO document which transformations have been applied
+    transformation = A.Compose([
+    A.HorizontalFlip(p=0.5),
+    A.VerticalFlip(p=0.5),
+    A.RandomRotate90(p=0.5),
+    A.RandomBrightnessContrast(p=0.2),
+    ])
+
+    return transformation
+
+
+def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_9", model_path="None"):
     global path_to_ds
     path_to_ds = f"datasets/{ds}"
     global batch_size
@@ -369,7 +381,12 @@ def a_3_pipeline(mode, model="baseline", ds="dataset_9", model_path="None"):
     model_name = model
 
     if mode == "train":
-        train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
+        if transform:
+            transformation = get_transformation()
+        else:
+            transformation = None
+
+        train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, transformation, batch_size=batch_size)
         if model_name == "baseline":
             model = PixelClassifier()
         else:
@@ -389,5 +406,3 @@ def a_3_pipeline(mode, model="baseline", ds="dataset_9", model_path="None"):
         hyperparam_tuning()
 
 a_3_pipeline(mode="tuning")
-
-#TODO hyperparam tuning of PixelClassifier
