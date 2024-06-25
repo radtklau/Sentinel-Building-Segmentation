@@ -143,26 +143,7 @@ def get_dataloaders(path_to_ds, transformation=None, batch_size=32):
     
     return train_loader, val_loader, test_loader
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=0.001, store_results=True):
-    models_dir_name = "models"
-    if not os.path.exists(models_dir_name):
-        os.makedirs(models_dir_name)
-
-    run_ind = 0
-    this_run_dir_name = ""
-    while True:
-        path_to_run = f"models/run_{run_ind}"
-        if not os.path.exists(path_to_run):
-            this_run_dir_name = f"run_{run_ind}"
-            break
-        else:
-            run_ind += 1
-
-    global this_run_dir_path
-    this_run_dir_path = os.path.join(models_dir_name, this_run_dir_name)
-    if store_results:
-        os.makedirs(this_run_dir_path)
-
+def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=0.001, this_run_dir_path=None):
     print("Training model...")
     #criterion = nn.BCELoss()
     #optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -191,14 +172,13 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
         training_loss_ls.append(running_loss/len(train_loader))
         print(f'Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(train_loader)}, Val Loss: {val_loss}, Val Acc: {val_acc}')
     
-    if store_results:
-        print("Saving plots...")
-        save_plot(cont_training_loss_ls, "cont_training_loss", this_run_dir_path)
-        save_plot(val_loss_ls, "val_loss", this_run_dir_path)
-        save_plot(val_acc_ls, "val_acc", this_run_dir_path)
-        save_plot(training_loss_ls, "training_loss", this_run_dir_path)
-        print("Saving model...")
-        save_model(model, num_epochs, learning_rate, this_run_dir_path)
+    print("Saving plots...")
+    save_plot(cont_training_loss_ls, "cont_training_loss", this_run_dir_path)
+    save_plot(val_loss_ls, "val_loss", this_run_dir_path)
+    save_plot(val_acc_ls, "val_acc", this_run_dir_path)
+    save_plot(training_loss_ls, "training_loss", this_run_dir_path)
+    print("Saving model...")
+    save_model(model, num_epochs, learning_rate, this_run_dir_path)
     return model
 
 def save_plot(data, type, this_run_dir_path):
@@ -371,6 +351,19 @@ def get_transformation(): #TODO document which transformations have been applied
 
     return transformation
 
+def save_augmentation(path, transformation):
+    if not transformation:
+        with open(path, 'w') as f:
+            f.write("No augmentation applied.\n")    
+    else:
+        with open(path, 'w') as f:
+            f.write("Applied augmentation:\n")
+            for idx, aug in enumerate(transformation, start=1):
+                f.write(f"Augmentation {idx}:\n")
+                for key, value in aug.items():
+                    f.write(f"{key}: {value}\n")
+                f.write("\n")
+
 
 def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_9", model_path="None"):
     global path_to_ds
@@ -381,10 +374,30 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_9", model_
     model_name = model
 
     if mode == "train":
+        models_dir_name = "models"
+        if not os.path.exists(models_dir_name):
+            os.makedirs(models_dir_name)
+
+            run_ind = 0
+        this_run_dir_name = ""
+        while True:
+            path_to_run = f"models/run_{run_ind}"
+            if not os.path.exists(path_to_run):
+                this_run_dir_name = f"run_{run_ind}"
+                break
+            else:
+                run_ind += 1
+
+        this_run_dir_path = os.path.join(models_dir_name, this_run_dir_name)
+        os.makedirs(this_run_dir_path)
+
         if transform:
             transformation = get_transformation()
         else:
             transformation = None
+
+        augmentation_doc_path = os.path.join(this_run_dir_path, "augmentation.txt")
+        save_augmentation(augmentation_doc_path, transformation)
 
         train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, transformation, batch_size=batch_size)
         if model_name == "baseline":
@@ -395,7 +408,7 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_9", model_
         learning_rate = 0.005
         criterion = nn.BCELoss()
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-        trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=learning_rate)
+        trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=learning_rate, this_run_dir_path=this_run_dir_path)
         result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
         test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss(), save_result=True, result_path=result_path)
         print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
