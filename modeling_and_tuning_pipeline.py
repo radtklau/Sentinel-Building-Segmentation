@@ -15,7 +15,7 @@ import optuna
 from unet_parts import *
 
 class ImageDataset(Dataset):
-    def __init__(self, path_to_ds, mode):
+    def __init__(self, path_to_ds, mode, transform=None):
         if mode not in ["train", "test", "val"]:
             print("Invalid mode.")
             sys.exit()
@@ -32,12 +32,20 @@ class ImageDataset(Dataset):
         self.features = np.load(features_fp)
         self.labels = np.load(labels_fp)
 
+        self.transform = transform
+
     def __len__(self):
         return len(self.features)
 
     def __getitem__(self, ind):
         image = self.features[ind]
         label = self.labels[ind]
+
+        if self.transform:
+            augmented = self.transform(image=image, mask=label)
+            image = augmented['image']
+            label = augmented['mask']
+
         return image, label
 
 """
