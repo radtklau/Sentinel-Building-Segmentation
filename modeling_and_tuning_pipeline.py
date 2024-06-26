@@ -47,6 +47,7 @@ class ImageDataset(Dataset):
             image = augmented['image']
             label = augmented['mask']
 
+        image = np.transpose(image, (2,0,1))
         return image, label
 
 """
@@ -341,15 +342,15 @@ def hyperparam_tuning():
         f.write("Best hyperparams for pixel classifier:\n")
         f.write(f'{best_hyperparams}\n')
 
-def get_transformation(): #TODO document which transformations have been applied
-    transformation = A.Compose([
+def get_augmentation():
+    augmentation = A.Compose([
     A.HorizontalFlip(p=0.5),
     A.VerticalFlip(p=0.5),
     A.RandomRotate90(p=0.5),
-    A.RandomBrightnessContrast(p=0.2),
+    A.RandomBrightnessContrast(p=0.2)
     ])
 
-    return transformation
+    return augmentation
 
 def save_augmentation(path, transformation):
     if not transformation:
@@ -357,28 +358,29 @@ def save_augmentation(path, transformation):
             f.write("No augmentation applied.\n")    
     else:
         with open(path, 'w') as f:
-            f.write("Applied augmentation:\n")
+            f.write("Applied augmentations:\n")
             for idx, aug in enumerate(transformation, start=1):
+                aug_dict = aug.to_dict()
                 f.write(f"Augmentation {idx}:\n")
-                for key, value in aug.items():
-                    f.write(f"{key}: {value}\n")
-                f.write("\n")
+                f.write(f"{aug_dict['transform']}\n")
 
 
-def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_9", model_path="None"):
+def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_10", model_path="None"):
     global path_to_ds
-    path_to_ds = f"datasets/{ds}"
     global batch_size
-    batch_size = 32
     global model_name
+    path_to_ds = f"datasets/{ds}"
     model_name = model
+    batch_size = 64 #32
+    learning_rate = 0.05 #0.005
+    num_epochs = 10
 
     if mode == "train":
         models_dir_name = "models"
         if not os.path.exists(models_dir_name):
             os.makedirs(models_dir_name)
 
-            run_ind = 0
+        run_ind = 0
         this_run_dir_name = ""
         while True:
             path_to_run = f"models/run_{run_ind}"
@@ -392,7 +394,7 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_9", model_
         os.makedirs(this_run_dir_path)
 
         if transform:
-            transformation = get_transformation()
+            transformation = get_augmentation()
         else:
             transformation = None
 
@@ -405,10 +407,10 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_9", model_
         else:
             model = UNet(n_channels=3, n_classes=1, bilinear=True)
 
-        learning_rate = 0.005
+
         criterion = nn.BCELoss()
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-        trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=learning_rate, this_run_dir_path=this_run_dir_path)
+        trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=num_epochs, learning_rate=learning_rate, this_run_dir_path=this_run_dir_path)
         result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
         test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss(), save_result=True, result_path=result_path)
         print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
@@ -418,4 +420,4 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_9", model_
     else: #hyperparam tuning
         hyperparam_tuning()
 
-a_3_pipeline(mode="tuning")
+a_3_pipeline(mode="train", transform=True)

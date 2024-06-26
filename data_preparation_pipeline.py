@@ -77,7 +77,7 @@ def build_final_arrays(label_arrays, feature_arrays):
     feature_data_fp = os.path.join(path_to_dataset, 'features.npy')
     label_data_fp = os.path.join(path_to_dataset, 'labels.npy')
     
-    final_feature_array = np.transpose(final_feature_array, (0, 3, 1, 2)) #transpose for pytorch conv2d()
+    #final_feature_array = np.transpose(final_feature_array, (0, 3, 1, 2)) #transpose for pytorch conv2d()
     final_feature_array = final_feature_array.astype(np.float32) / 255.0 #normalize
     final_label_array = final_label_array.astype(np.float32)
 
