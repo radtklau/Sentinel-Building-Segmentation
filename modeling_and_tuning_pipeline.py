@@ -32,6 +32,7 @@ class ImageDataset(Dataset):
 
         self.features = np.load(features_fp)
         self.labels = np.load(labels_fp)
+        #self.features = np.transpose(self.features, (0,2,3,1))
 
         self.transformation = transformation
 
@@ -83,10 +84,10 @@ class PixelClassifier(nn.Module):
             if layer_idx == 0:
                 self.conv_layers.append(nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1))
             else:
-                self.conv_layers.append(nn.Conv2d(base_channels * (2**(layer_idx-1)), 
-                                                  base_channels * (2**layer_idx), 
+                self.conv_layers.append(nn.Conv2d(base_channels * (2**(layer_idx-1)),
+                                                  base_channels * (2**layer_idx),
                                                   kernel_size=3, padding=1))
-                
+
         self.conv_out = nn.Conv2d(base_channels * (2**(num_layers-1)), out_channels, kernel_size=1)
 
     def forward(self, x):
@@ -94,10 +95,11 @@ class PixelClassifier(nn.Module):
         for layer_idx in range(self.num_layers):
             x = self.conv_layers[layer_idx](x)
             x = F.relu(x)
-        
+
         x = self.conv_out(x)
         x = torch.sigmoid(x)
         return x
+
 
 class UNet(nn.Module):
     def __init__(self, n_channels, n_classes, bilinear=True):
@@ -137,18 +139,18 @@ def get_dataloaders(path_to_ds, transformation=None, batch_size=32):
     train_dataset = ImageDataset(path_to_ds, 'train', transformation)
     val_dataset = ImageDataset(path_to_ds, 'val', transformation)
     test_dataset = ImageDataset(path_to_ds, 'test', transformation)
-    
+
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
-    
+
     return train_loader, val_loader, test_loader
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=0.001, this_run_dir_path=None):
+def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=0.001, this_run_dir_path=None, device=None, save_data=True):
     print("Training model...")
     #criterion = nn.BCELoss()
     #optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    
+
     training_loss_ls =  []
     val_loss_ls = []
     val_acc_ls = []
@@ -158,6 +160,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
         model.train()
         running_loss = 0.0
         for images, labels in train_loader:
+            images, labels = images.to(device), labels.to(device)  # Move data to GPU
             optimizer.zero_grad()
             outputs = model(images)
             labels = labels.unsqueeze(1)
@@ -166,20 +169,21 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
             optimizer.step()
             running_loss += loss.item()
             cont_training_loss_ls.append(loss.item())
-        
-        val_loss, val_acc = evaluate_model(model, val_loader, criterion)
+
+        val_loss, val_acc = evaluate_model(model, val_loader, criterion, device=device)
         val_loss_ls.append(val_loss)
         val_acc_ls.append(val_acc)
         training_loss_ls.append(running_loss/len(train_loader))
         print(f'Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(train_loader)}, Val Loss: {val_loss}, Val Acc: {val_acc}')
-    
-    print("Saving plots...")
-    save_plot(cont_training_loss_ls, "cont_training_loss", this_run_dir_path)
-    save_plot(val_loss_ls, "val_loss", this_run_dir_path)
-    save_plot(val_acc_ls, "val_acc", this_run_dir_path)
-    save_plot(training_loss_ls, "training_loss", this_run_dir_path)
-    print("Saving model...")
-    save_model(model, num_epochs, learning_rate, this_run_dir_path)
+
+    if save_data:
+        print("Saving plots...")
+        save_plot(cont_training_loss_ls, "cont_training_loss", this_run_dir_path)
+        save_plot(val_loss_ls, "val_loss", this_run_dir_path)
+        save_plot(val_acc_ls, "val_acc", this_run_dir_path)
+        save_plot(training_loss_ls, "training_loss", this_run_dir_path)
+        print("Saving model...")
+        save_model(model, num_epochs, learning_rate, this_run_dir_path)
     return model
 
 def save_plot(data, type, this_run_dir_path):
@@ -191,7 +195,8 @@ def save_plot(data, type, this_run_dir_path):
         plt.xlabel('Epochs')
         plt.title(f'{type} Over Epochs')
 
-    plt.plot(data, label=type)
+    #print(data)
+    plt.plot([d.cpu().numpy() if isinstance(d, torch.Tensor) else d for d in data], label=type)
     plt.ylabel(type)
     plt.legend()
     plt.grid(True)
@@ -203,26 +208,28 @@ def save_model(model, num_epochs, learning_rate, this_run_dir_path):
     current_datetime = datetime.now()
     formatted_datetime = current_datetime.strftime("%Y-%m-%d_%H-%M-%S")
     global model_name
+    #TODO change model name to include augmented data (true/false), fix bug with path_to_ds[-1]
     model_name = f"{model_name}_ds{path_to_ds[-1]}_ep{num_epochs}_lr{learning_rate}_bs{batch_size}_{formatted_datetime}.pth"
     path_to_model = os.path.join(this_run_dir_path, model_name)
     torch.save(model, path_to_model)
 
-def evaluate_model(model, data_loader, criterion, save_result=False, result_path=None):
+def evaluate_model(model, data_loader, criterion, save_result=False, result_path=None, device=None):
     print("Evaluating model...")
     model.eval()
     loss = 0.0
     all_labels = []
     all_preds = []
-    
+
     with torch.no_grad():
         for images, labels in data_loader:
+            images, labels = images.to(device), labels.to(device)  # Move data to GPU
             outputs = model(images)
             loss = criterion(outputs, labels.unsqueeze(1))
             loss += loss.item()
             preds = (outputs > 0.5).float()
-            all_labels.extend(labels.numpy().flatten())
-            all_preds.extend(preds.numpy().flatten())
-    
+            all_labels.extend(labels.cpu().numpy().flatten())
+            all_preds.extend(preds.cpu().numpy().flatten())
+
     loss /= len(data_loader)
     acc = accuracy_score(np.array(all_labels), np.array(all_preds))
 
@@ -231,7 +238,7 @@ def evaluate_model(model, data_loader, criterion, save_result=False, result_path
             f.write("Loss and accuracy on test data:\n")
             f.write(f'Loss: {loss}\n')
             f.write(f'Accuracy: {acc}\n')
-    
+
     return loss, acc
 
 def test_model(model_path): #test model on test image
@@ -292,24 +299,28 @@ def custom_acc_eval(label_matrix, prediction_matrix):
     return correct_preds / total_preds
 
 def objective(trial):
+    print("Using GPU...")
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     # Define parameters to tune
     #hidden_dim = trial.suggest_int('hidden_dim', 16, 256, log=True)
     learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-1, log=True)
-    batch_size = trial.suggest_categorical('batch_size', [32, 64, 128])
-    num_layers = trial.suggest_int('num_layers', 1, 10)
-    
+    batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
+    num_layers = trial.suggest_int('num_layers', 1, 5)
+
     # Load dataset and prepare data loaders
     train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
-    
+
     # Initialize model and optimizer
     model = PixelClassifier(in_channels=3, out_channels=1, num_layers=num_layers, base_channels=32)
+    model.to(device)  # Move the model to the device
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    criterion = nn.CrossEntropyLoss()
-    
-    trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=learning_rate, store_results=False)
-    
-    loss, acc = evaluate_model(trained_model, val_loader, criterion) #eval model on val data
-    
+    criterion = nn.BCELoss().to(device)
+
+    trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=learning_rate, device=device, save_data=False)
+
+    loss, acc = evaluate_model(trained_model, val_loader, criterion, device=device) #eval model on val data
+
     # Report validation accuracy as the objective to minimize (negative of accuracy for maximize)
     return acc
 
@@ -371,9 +382,14 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_10", model
     global model_name
     path_to_ds = f"datasets/{ds}"
     model_name = model
-    batch_size = 64 #32
-    learning_rate = 0.05 #0.005
+    batch_size = 32 #32
+    learning_rate = 0.005 #0.005
     num_epochs = 10
+
+    print("Using GPU...")
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(torch.cuda.is_available())
+    print(device)
 
     if mode == "train":
         models_dir_name = "models"
@@ -403,16 +419,16 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_10", model
 
         train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, transformation, batch_size=batch_size)
         if model_name == "baseline":
-            model = PixelClassifier()
+            model = PixelClassifier().to(device)
         else:
-            model = UNet(n_channels=3, n_classes=1, bilinear=True)
+            model = UNet(n_channels=3, n_classes=1, bilinear=True).to(device)
 
 
-        criterion = nn.BCELoss()
+        criterion = nn.BCELoss().to(device)
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-        trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=num_epochs, learning_rate=learning_rate, this_run_dir_path=this_run_dir_path)
+        trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=num_epochs, learning_rate=learning_rate, this_run_dir_path=this_run_dir_path, device=device)
         result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
-        test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss(), save_result=True, result_path=result_path)
+        test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss().to(device), save_result=True, result_path=result_path, device=device)
         print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
     elif mode == "test":
         #model_path = "models/run_3/baseline_ds9_ep10_lr0.005_bs32_2024-06-22_21-25-37.pth"
@@ -420,4 +436,6 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_10", model
     else: #hyperparam tuning
         hyperparam_tuning()
 
-a_3_pipeline(mode="train", transform=True)
+global model_name
+#a_3_pipeline(mode="train", transform=True)
+a_3_pipeline(mode="tune")
