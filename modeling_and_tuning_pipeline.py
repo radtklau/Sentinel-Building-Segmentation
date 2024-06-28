@@ -299,7 +299,7 @@ def custom_acc_eval(label_matrix, prediction_matrix):
     return correct_preds / total_preds
 
 def objective(trial):
-    print("Using GPU...")
+    print("Selecting device...")
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Define parameters to tune
@@ -386,9 +386,9 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_10", model
     learning_rate = 0.005 #0.005
     num_epochs = 10
 
-    print("Using GPU...")
+    print("Selecting device...")
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(torch.cuda.is_available())
+    #print(torch.cuda.is_available())
     print(device)
 
     if mode == "train":
