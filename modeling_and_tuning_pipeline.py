@@ -14,6 +14,7 @@ from PIL import Image
 import optuna
 from unet_parts import *
 import albumentations as A
+import logging
 
 class ImageDataset(Dataset):
     def __init__(self, path_to_ds, mode, transformation=None):
@@ -73,13 +74,15 @@ class PixelClassifier(nn.Module):
 """
 
 class PixelClassifier(nn.Module):
-    def __init__(self, in_channels=3, out_channels=1, num_layers=4, base_channels=32):
+    def __init__(self, in_channels=3, out_channels=1, num_layers=4, base_channels=32, dropout_prob=0.5):
         super(PixelClassifier, self).__init__()
         self.num_layers = num_layers
         self.in_channels = in_channels
         self.out_channels = out_channels
 
         self.conv_layers = nn.ModuleList()
+        self.dropout_layers = nn.ModuleList()
+        
         for layer_idx in range(num_layers):
             if layer_idx == 0:
                 self.conv_layers.append(nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1))
@@ -87,6 +90,10 @@ class PixelClassifier(nn.Module):
                 self.conv_layers.append(nn.Conv2d(base_channels * (2**(layer_idx-1)),
                                                   base_channels * (2**layer_idx),
                                                   kernel_size=3, padding=1))
+            
+            # Add dropout layer after each convolutional layer (except the last one)
+            if layer_idx < num_layers - 1:
+                self.dropout_layers.append(nn.Dropout2d(p=dropout_prob))
 
         self.conv_out = nn.Conv2d(base_channels * (2**(num_layers-1)), out_channels, kernel_size=1)
 
@@ -95,6 +102,10 @@ class PixelClassifier(nn.Module):
         for layer_idx in range(self.num_layers):
             x = self.conv_layers[layer_idx](x)
             x = F.relu(x)
+            
+            # Apply dropout after each convolutional layer (except the last one)
+            if layer_idx < self.num_layers - 1:
+                x = self.dropout_layers[layer_idx](x)
 
         x = self.conv_out(x)
         x = torch.sigmoid(x)
@@ -151,9 +162,13 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
     #criterion = nn.BCELoss()
     #optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    training_loss_ls =  []
+    running_loss_ls =  []
+
     val_loss_ls = []
     val_acc_ls = []
+    train_loss_ls = []
+    train_acc_ls = []
+
     cont_training_loss_ls = []
 
     for epoch in tqdm(range(num_epochs)):
@@ -171,35 +186,41 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
             cont_training_loss_ls.append(loss.item())
 
         val_loss, val_acc = evaluate_model(model, val_loader, criterion, device=device)
+        train_loss, train_acc = evaluate_model(model, train_loader, criterion, device=device)
+
         val_loss_ls.append(val_loss)
         val_acc_ls.append(val_acc)
-        training_loss_ls.append(running_loss/len(train_loader))
-        print(f'Epoch {epoch+1}/{num_epochs}, Loss: {running_loss/len(train_loader)}, Val Loss: {val_loss}, Val Acc: {val_acc}')
+        train_loss_ls.append(train_loss)
+        train_acc_ls.append(train_acc)
+        
+        running_loss_ls.append(running_loss/len(train_loader))
+        print(f'Epoch {epoch+1}/{num_epochs}, Running Loss: {running_loss/len(train_loader)}, Val Loss: {val_loss}, Val Acc: {val_acc}')
 
     if save_data:
         print("Saving plots...")
-        save_plot(cont_training_loss_ls, "cont_training_loss", this_run_dir_path)
-        save_plot(val_loss_ls, "val_loss", this_run_dir_path)
-        save_plot(val_acc_ls, "val_acc", this_run_dir_path)
-        save_plot(training_loss_ls, "training_loss", this_run_dir_path)
+        save_plot([val_acc, train_acc], "val_train_acc", this_run_dir_path)
+        save_plot([val_loss, train_loss], "val_train_loss", this_run_dir_path)
+
+        save_plot([cont_training_loss_ls], "cont_training_loss", this_run_dir_path)
+        save_plot([running_loss_ls], "running_loss", this_run_dir_path)
+
         print("Saving model...")
         save_model(model, num_epochs, learning_rate, this_run_dir_path)
     return model
 
 def save_plot(data, type, this_run_dir_path):
     plt.figure(figsize=(10, 5))
-    if type == "cont_training_loss":
-        plt.xlabel('Training steps')
-        plt.title(f'{type} Over Training Steps')
-    else:
-        plt.xlabel('Epochs')
-        plt.title(f'{type} Over Epochs')
+    plt.xlabel('Epochs')
+    plt.title(f'{type} Over Epochs')
 
-    #print(data)
-    plt.plot([d.cpu().numpy() if isinstance(d, torch.Tensor) else d for d in data], label=type)
+    for i, ls in enumerate(data):
+        ls = [d.cpu().numpy() if isinstance(d, torch.Tensor) else d for d in ls]
+        plt.plot(ls, label=type)
+
     plt.ylabel(type)
     plt.legend()
     plt.grid(True)
+    
     path_to_plot = os.path.join(this_run_dir_path, f'{type}_plot.png')
     plt.savefig(path_to_plot)
     plt.close()
@@ -213,7 +234,8 @@ def save_model(model, num_epochs, learning_rate, this_run_dir_path):
     path_to_model = os.path.join(this_run_dir_path, model_name)
     torch.save(model, path_to_model)
 
-def evaluate_model(model, data_loader, criterion, save_result=False, result_path=None, device=None):
+
+def evaluate_model(model, data_loader, criterion, save_result=False, this_run_dir_path=None, device=None):
     print("Evaluating model...")
     model.eval()
     loss = 0.0
@@ -234,6 +256,7 @@ def evaluate_model(model, data_loader, criterion, save_result=False, result_path
     acc = accuracy_score(np.array(all_labels), np.array(all_preds))
 
     if save_result:
+        result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
         with open(result_path, 'w') as f:
             f.write("Loss and accuracy on test data:\n")
             f.write(f'Loss: {loss}\n')
@@ -241,6 +264,7 @@ def evaluate_model(model, data_loader, criterion, save_result=False, result_path
 
     return loss, acc
 
+"""
 def test_model(model_path): #test model on test image
     model = torch.load(model_path)
     path_to_label_image = "building_and_sentinel_data/Berlin_test/Berlin_test_buildings.png"
@@ -290,6 +314,60 @@ def test_model(model_path): #test model on test image
 
     path_to_preds = os.path.join(os.path.dirname(model_path), "preds_test_img.png")
     plt.imsave(path_to_preds, pred_matrix, cmap='gray')  # Save the second image
+"""
+
+def test_model(model, criterion, save_result=True, this_run_dir_path=None):
+    path_to_label_image = "building_and_sentinel_data/Berlin_test/Berlin_test_buildings.png"
+    path_to_rgb_image = "building_and_sentinel_data/Berlin_test/Berlin_test_rgb.png"
+    label_im = Image.open(path_to_label_image).convert('RGB')
+    label_im = np.array(label_im)
+
+    building_mask = (label_im == [0, 0, 255]).all(axis=2) 
+    label_matrix = np.zeros((label_im.shape[0], label_im.shape[1]), dtype=np.int8)
+    label_matrix[building_mask] = 1
+
+    rgb_im = Image.open(path_to_rgb_image).convert('RGB')
+    rgb_im = np.array(rgb_im)
+    rgb_im = rgb_im.astype(np.float32) / 255.0
+    rgb_im = np.expand_dims(rgb_im, axis=0)
+    rgb_im = np.transpose(rgb_im, (0, 3, 1, 2))
+
+    inp = torch.tensor(rgb_im)
+
+    pred = model(inp)
+    loss = criterion(pred, label_matrix.unsqueeze(1))
+
+    pred_matrix = (pred > 0.5).float()
+    pred_matrix = pred_matrix.numpy().astype(np.int8)[0, 0]
+
+    acc = accuracy_score(label_matrix.flatten(), pred_matrix.flatten())
+
+
+    #print(f"{acc*100}%")
+
+    if save_result:
+        plt.figure(figsize=(10, 5))
+        
+        plt.subplot(1, 2, 1)
+        plt.imshow(label_matrix, cmap='gray', vmin=0, vmax=1) 
+        plt.title('labels')
+        plt.axis('off')
+
+        plt.subplot(1, 2, 2)
+        plt.imshow(pred_matrix, cmap='gray', vmin=0, vmax=1) 
+        plt.title('prediction')
+        plt.axis('off')
+
+        path_to_plot = os.path.join(this_run_dir_path, f'test_data_plot.png')
+        plt.savefig(path_to_plot)
+        plt.close()
+
+        result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
+        with open(result_path, 'w') as f:
+            f.write("Loss and accuracy on test data:\n")
+            f.write(f'Loss: {loss}\n')
+            f.write(f'Accuracy: {acc}\n')
+
 
 def custom_acc_eval(label_matrix, prediction_matrix):
     diff = abs(label_matrix - prediction_matrix)
@@ -299,7 +377,7 @@ def custom_acc_eval(label_matrix, prediction_matrix):
     return correct_preds / total_preds
 
 def objective(trial):
-    print("Selecting device...")
+    print("Using GPU...")
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Define parameters to tune
@@ -307,20 +385,23 @@ def objective(trial):
     learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-1, log=True)
     batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
     num_layers = trial.suggest_int('num_layers', 1, 5)
+    #num_epochs = trial.suggest_int('num_epochs', 5, 20)
+    dropout_prob = trial.suggest_float('dropout_prob', 0, 1)
 
     # Load dataset and prepare data loaders
     train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
 
     # Initialize model and optimizer
-    model = PixelClassifier(in_channels=3, out_channels=1, num_layers=num_layers, base_channels=32)
+    model = PixelClassifier(in_channels=3, out_channels=1, num_layers=num_layers, base_channels=32, dropout_prob=dropout_prob)
     model.to(device)  # Move the model to the device
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.BCELoss().to(device)
 
-    trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=10, learning_rate=learning_rate, device=device, save_data=False)
+    trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=20, learning_rate=learning_rate, device=device, save_data=False)
 
     loss, acc = evaluate_model(trained_model, val_loader, criterion, device=device) #eval model on val data
-
+    global logger
+    logger.info(f"Trial {trial.number}: learning_rate={learning_rate}, batch_size={batch_size}, num_layers={num_layers}, dropout_prob={dropout_prob}, accuracy={acc}")
     # Report validation accuracy as the objective to minimize (negative of accuracy for maximize)
     return acc
 
@@ -341,17 +422,32 @@ def hyperparam_tuning():
 
     this_run_dir_path = os.path.join(hyper_param_dir_name, this_run_dir_name)
 
+    #set up logging
+    global logger
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    path_to_hyper_param_tuning_logs = os.path.join(this_run_dir_path, f'tuning.log')
+    if not os.path.exists(path_to_hyper_param_tuning_logs):
+        os.makedirs(this_run_dir_path, exist_ok=True)  # Create the directory if it doesn't exist
+        open(path_to_hyper_param_tuning_logs, 'a').close()  # Create an empty file if it doesn't exist
+    file_handler = logging.FileHandler(path_to_hyper_param_tuning_logs)
+    file_handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=100)
+    study.optimize(objective, n_trials=20)
 
     # Get the best hyperparameters
     best_hyperparams = study.best_params
     print("Best hyperparameters:", best_hyperparams)
 
-    path_to_hyper_params = os.path.join(this_run_dir_path, f'best_pixel_cl_params.txt')
-    with open(path_to_hyper_params, 'w') as f:
+    path_to_best_hyper_params = os.path.join(this_run_dir_path, f'best_pixel_cl_params.txt')
+    with open(path_to_best_hyper_params, 'w') as f:
         f.write("Best hyperparams for pixel classifier:\n")
         f.write(f'{best_hyperparams}\n')
+
 
 def get_augmentation():
     augmentation = A.Compose([
@@ -376,7 +472,7 @@ def save_augmentation(path, transformation):
                 f.write(f"{aug_dict['transform']}\n")
 
 
-def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_10", model_path="None"):
+def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_24", model_path="None"):
     global path_to_ds
     global batch_size
     global model_name
@@ -384,11 +480,11 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_10", model
     model_name = model
     batch_size = 32 #32
     learning_rate = 0.005 #0.005
-    num_epochs = 10
+    num_epochs = 20
 
-    print("Selecting device...")
+    print("Using GPU...")
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    #print(torch.cuda.is_available())
+    print(torch.cuda.is_available())
     print(device)
 
     if mode == "train":
@@ -418,6 +514,7 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_10", model
         save_augmentation(augmentation_doc_path, transformation)
 
         train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, transformation, batch_size=batch_size)
+
         if model_name == "baseline":
             model = PixelClassifier().to(device)
         else:
@@ -426,10 +523,16 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_10", model
 
         criterion = nn.BCELoss().to(device)
         optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+
         trained_model = train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs=num_epochs, learning_rate=learning_rate, this_run_dir_path=this_run_dir_path, device=device)
-        result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
-        test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss().to(device), save_result=True, result_path=result_path, device=device)
-        print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
+
+        print("Testing model...")
+        test_loss, test_acc = evaluate_model(trained_model, test_loader, nn.BCELoss().to(device), save_result=True, this_run_dir_path=this_run_dir_path, device=device)
+        #print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
+
+        print("Testing on Berlin...")
+        test_model(trained_model, nn.BCELoss(), this_run_dir_path=this_run_dir_path)
+
     elif mode == "test":
         #model_path = "models/run_3/baseline_ds9_ep10_lr0.005_bs32_2024-06-22_21-25-37.pth"
         test_model(model_path)
