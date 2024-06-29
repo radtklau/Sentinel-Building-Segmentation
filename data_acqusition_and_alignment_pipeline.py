@@ -263,12 +263,12 @@ def label_gen(city_name):
 def a_1_pipeline(city_name):
     get_osm_building_data(city_name)
 
-    temporal_extent=["2024-05-14", "2024-05-15"]
+    temporal_extent=["2024-05-21", "2024-05-22"]
     bands=["B04", "B03", "B02", "B08"]
     get_sentinel_image_data(temporal_extent, bands, city_name)
 
     label_gen(city_name)
 
-city_name = "Rostock"
+city_name = "Flensburg"
 a_1_pipeline(city_name)
 #plot_data(city_name, "buildings")

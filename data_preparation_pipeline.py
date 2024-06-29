@@ -84,22 +84,34 @@ def build_final_arrays(label_arrays, feature_arrays):
     np.save(feature_data_fp, final_feature_array)
     np.save(label_data_fp, final_label_array)
 
-    #final_label_array_flat = final_label_array.flatten()
+    final_label_array_summed = np.sum(final_label_array, axis=(1,2))
+    final_label_array_summed_binned = final_label_array_summed % 100 #100 bins
 
     train_size = 0.7
     val_size = 0.15
     test_size = 0.15
 
-    features_train, features_temp, labels_train, labels_temp = train_test_split( \
-        final_feature_array, final_label_array, test_size=(1 - train_size), random_state=42)
+    features_train, features_temp, labels_train, labels_temp = \
+    train_test_split(
+        final_feature_array, 
+        final_label_array, 
+        test_size=(1 - train_size), 
+        random_state=42,
+        stratify=final_label_array_summed_binned)
 
     temp_size = val_size + test_size
     val_test_split = val_size / temp_size
 
-    #labels_temp_flat = labels_temp.flatten()
+    labels_temp_summed = np.sum(labels_temp, axis=(1,2))
+    labels_temp_summed_binned = labels_temp_summed % 100
 
-    features_val, features_test, labels_val, labels_test = train_test_split( \
-        features_temp, labels_temp, test_size=val_test_split, random_state=42)
+    features_val, features_test, labels_val, labels_test = \
+    train_test_split(
+        features_temp, 
+        labels_temp, 
+        test_size=val_test_split, 
+        random_state=42,
+        stratify=labels_temp_summed_binned)
     
     #TODO right now only stratification is used to balance out the labels
     #in the datasets, maybe implement further strategies to ensure balanced
@@ -176,5 +188,7 @@ def a_2_pipeline(city_names):
     build_final_arrays(label_arrays, feature_arrays) 
 
 global city_names
-city_names = ["Berlin", "Denver", "Wien", "Helsinki", "Hamm"]
+city_names = ["Berlin", "Denver", "Wien", "Helsinki",
+               "Hamm", "Flensburg", "Oslo", "Stockholm", 
+               "Marseille", "Glasgow"]
 a_2_pipeline(city_names)
