@@ -188,9 +188,9 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
         val_loss, val_acc = evaluate_model(model, val_loader, criterion, device=device)
         train_loss, train_acc = evaluate_model(model, train_loader, criterion, device=device)
 
-        val_loss_ls.append(val_loss)
+        val_loss_ls.append(val_loss.cpu())
         val_acc_ls.append(val_acc)
-        train_loss_ls.append(train_loss)
+        train_loss_ls.append(train_loss.cpu())
         train_acc_ls.append(train_acc)
         
         running_loss_ls.append(running_loss/len(train_loader))
@@ -198,8 +198,8 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
 
     if save_data:
         print("Saving plots...")
-        save_plot([val_acc, train_acc], "val_train_acc", this_run_dir_path)
-        save_plot([val_loss, train_loss], "val_train_loss", this_run_dir_path)
+        save_plot([val_acc_ls, train_acc_ls], "val_train_acc", this_run_dir_path)
+        save_plot([val_loss_ls, train_loss_ls], "val_train_loss", this_run_dir_path)
 
         save_plot([cont_training_loss_ls], "cont_training_loss", this_run_dir_path)
         save_plot([running_loss_ls], "running_loss", this_run_dir_path)
@@ -214,7 +214,7 @@ def save_plot(data, type, this_run_dir_path):
     plt.title(f'{type} Over Epochs')
 
     for i, ls in enumerate(data):
-        ls = [d.cpu().numpy() if isinstance(d, torch.Tensor) else d for d in ls]
+        #ls = ls.cpu().numpy()
         plt.plot(ls, label=type)
 
     plt.ylabel(type)
@@ -316,7 +316,7 @@ def test_model(model_path): #test model on test image
     plt.imsave(path_to_preds, pred_matrix, cmap='gray')  # Save the second image
 """
 
-def test_model(model, criterion, save_result=True, this_run_dir_path=None):
+def test_model(model, save_result=True, this_run_dir_path=None, device=None):
     path_to_label_image = "building_and_sentinel_data/Berlin_test/Berlin_test_buildings.png"
     path_to_rgb_image = "building_and_sentinel_data/Berlin_test/Berlin_test_rgb.png"
     label_im = Image.open(path_to_label_image).convert('RGB')
@@ -332,10 +332,9 @@ def test_model(model, criterion, save_result=True, this_run_dir_path=None):
     rgb_im = np.expand_dims(rgb_im, axis=0)
     rgb_im = np.transpose(rgb_im, (0, 3, 1, 2))
 
-    inp = torch.tensor(rgb_im)
-
+    inp = torch.tensor(rgb_im).to(device)
     pred = model(inp)
-    loss = criterion(pred, label_matrix.unsqueeze(1))
+    pred = pred.cpu().numpy()
 
     pred_matrix = (pred > 0.5).float()
     pred_matrix = pred_matrix.numpy().astype(np.int8)[0, 0]
@@ -362,11 +361,12 @@ def test_model(model, criterion, save_result=True, this_run_dir_path=None):
         plt.savefig(path_to_plot)
         plt.close()
 
-        result_path = os.path.join(this_run_dir_path, "acc_and_loss.txt")
+        result_path = os.path.join(this_run_dir_path, "acc_berlin.txt")
         with open(result_path, 'w') as f:
-            f.write("Loss and accuracy on test data:\n")
-            f.write(f'Loss: {loss}\n')
+            f.write("Accuracy on test image:\n")
             f.write(f'Accuracy: {acc}\n')
+
+
 
 
 def custom_acc_eval(label_matrix, prediction_matrix):
@@ -480,7 +480,7 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_24", model
     model_name = model
     batch_size = 32 #32
     learning_rate = 0.005 #0.005
-    num_epochs = 20
+    num_epochs = 1
 
     print("Using GPU...")
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -531,7 +531,7 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_24", model
         #print(f'Test Loss: {test_loss}, Test Accuracy: {test_acc}')
 
         print("Testing on Berlin...")
-        test_model(trained_model, nn.BCELoss(), this_run_dir_path=this_run_dir_path)
+        test_model(trained_model, this_run_dir_path=this_run_dir_path, device=device)
 
     elif mode == "test":
         #model_path = "models/run_3/baseline_ds9_ep10_lr0.005_bs32_2024-06-22_21-25-37.pth"
