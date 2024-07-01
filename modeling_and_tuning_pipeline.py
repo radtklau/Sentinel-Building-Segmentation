@@ -82,7 +82,7 @@ class PixelClassifier(nn.Module):
 
         self.conv_layers = nn.ModuleList()
         self.dropout_layers = nn.ModuleList()
-        
+
         for layer_idx in range(num_layers):
             if layer_idx == 0:
                 self.conv_layers.append(nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1))
@@ -90,7 +90,7 @@ class PixelClassifier(nn.Module):
                 self.conv_layers.append(nn.Conv2d(base_channels * (2**(layer_idx-1)),
                                                   base_channels * (2**layer_idx),
                                                   kernel_size=3, padding=1))
-            
+
             # Add dropout layer after each convolutional layer (except the last one)
             if layer_idx < num_layers - 1:
                 self.dropout_layers.append(nn.Dropout2d(p=dropout_prob))
@@ -102,7 +102,7 @@ class PixelClassifier(nn.Module):
         for layer_idx in range(self.num_layers):
             x = self.conv_layers[layer_idx](x)
             x = F.relu(x)
-            
+
             # Apply dropout after each convolutional layer (except the last one)
             if layer_idx < self.num_layers - 1:
                 x = self.dropout_layers[layer_idx](x)
@@ -192,35 +192,35 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
         val_acc_ls.append(val_acc)
         train_loss_ls.append(train_loss.cpu())
         train_acc_ls.append(train_acc)
-        
+
         running_loss_ls.append(running_loss/len(train_loader))
         print(f'Epoch {epoch+1}/{num_epochs}, Running Loss: {running_loss/len(train_loader)}, Val Loss: {val_loss}, Val Acc: {val_acc}')
 
     if save_data:
         print("Saving plots...")
-        save_plot([val_acc_ls, train_acc_ls], "val_train_acc", this_run_dir_path)
-        save_plot([val_loss_ls, train_loss_ls], "val_train_loss", this_run_dir_path)
+        save_plot(train_acc_ls, "train_acc", this_run_dir_path)
+        save_plot(val_acc_ls, "val_acc", this_run_dir_path)
+        save_plot(train_loss_ls, "train_loss", this_run_dir_path)
+        save_plot(val_loss_ls, "val_loss", this_run_dir_path)
 
-        save_plot([cont_training_loss_ls], "cont_training_loss", this_run_dir_path)
-        save_plot([running_loss_ls], "running_loss", this_run_dir_path)
+        save_plot(cont_training_loss_ls, "cont_training_loss", this_run_dir_path, "Training step")
+        save_plot(running_loss_ls, "running_loss", this_run_dir_path)
 
         print("Saving model...")
         save_model(model, num_epochs, learning_rate, this_run_dir_path)
     return model
 
-def save_plot(data, type, this_run_dir_path):
+def save_plot(data, type, this_run_dir_path, xlabel="Epochs"):
     plt.figure(figsize=(10, 5))
-    plt.xlabel('Epochs')
-    plt.title(f'{type} Over Epochs')
+    plt.xlabel(xlabel)
+    plt.title(f'{type} Over {xlabel}')
 
-    for i, ls in enumerate(data):
-        #ls = ls.cpu().numpy()
-        plt.plot(ls, label=type)
+    plt.plot(data, label=type)
 
     plt.ylabel(type)
     plt.legend()
     plt.grid(True)
-    
+
     path_to_plot = os.path.join(this_run_dir_path, f'{type}_plot.png')
     plt.savefig(path_to_plot)
     plt.close()
@@ -246,6 +246,7 @@ def evaluate_model(model, data_loader, criterion, save_result=False, this_run_di
         for images, labels in data_loader:
             images, labels = images.to(device), labels.to(device)  # Move data to GPU
             outputs = model(images)
+            #print(type(outputs))
             loss = criterion(outputs, labels.unsqueeze(1))
             loss += loss.item()
             preds = (outputs > 0.5).float()
@@ -322,7 +323,7 @@ def test_model(model, save_result=True, this_run_dir_path=None, device=None):
     label_im = Image.open(path_to_label_image).convert('RGB')
     label_im = np.array(label_im)
 
-    building_mask = (label_im == [0, 0, 255]).all(axis=2) 
+    building_mask = (label_im == [0, 0, 255]).all(axis=2)
     label_matrix = np.zeros((label_im.shape[0], label_im.shape[1]), dtype=np.int8)
     label_matrix[building_mask] = 1
 
@@ -334,21 +335,23 @@ def test_model(model, save_result=True, this_run_dir_path=None, device=None):
 
     inp = torch.tensor(rgb_im).to(device)
     pred = model(inp)
-    pred = pred.cpu().numpy()
+    #pred = pred.cpu().detach().numpy()
 
+    #count = np.sum(pred > 0.5)
+    #print(count)
     pred_matrix = (pred > 0.5).float()
-    pred_matrix = pred_matrix.numpy().astype(np.int8)[0, 0]
+    pred_matrix = pred_matrix.cpu().numpy().astype(np.int8)[0,0]
+    #pred_matrix = pred_matrix.astype(np.int8)[0, 0]
 
     acc = accuracy_score(label_matrix.flatten(), pred_matrix.flatten())
-
 
     #print(f"{acc*100}%")
 
     if save_result:
         plt.figure(figsize=(10, 5))
-        
+
         plt.subplot(1, 2, 1)
-        plt.imshow(label_matrix, cmap='gray', vmin=0, vmax=1) 
+        plt.imshow(label_matrix, cmap='gray', vmin=0, vmax=1)
         plt.title('labels')
         plt.axis('off')
 
@@ -356,10 +359,10 @@ def test_model(model, save_result=True, this_run_dir_path=None, device=None):
         plt.imsave(path_to_plot, label_matrix, cmap='gray')
 
         plt.subplot(1, 2, 2)
-        plt.imshow(pred_matrix, cmap='gray', vmin=0, vmax=1) 
+        plt.imshow(pred_matrix, cmap='gray', vmin=0, vmax=1)
         plt.title('prediction')
         plt.axis('off')
-        
+
         path_to_plot = os.path.join(this_run_dir_path, f'preds_berlin.png')
         plt.imsave(path_to_plot, pred_matrix, cmap='gray')
 
@@ -369,7 +372,6 @@ def test_model(model, save_result=True, this_run_dir_path=None, device=None):
         with open(result_path, 'w') as f:
             f.write("Accuracy on test image:\n")
             f.write(f'Accuracy: {acc}\n')
-
 
 
 
@@ -388,7 +390,7 @@ def objective(trial):
     #hidden_dim = trial.suggest_int('hidden_dim', 16, 256, log=True)
     learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-1, log=True)
     batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
-    num_layers = trial.suggest_int('num_layers', 1, 5)
+    num_layers = trial.suggest_int('num_layers', 1, 6)
     #num_epochs = trial.suggest_int('num_epochs', 5, 20)
     dropout_prob = trial.suggest_float('dropout_prob', 0, 1)
 
@@ -441,7 +443,7 @@ def hyperparam_tuning():
     logger.addHandler(file_handler)
 
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=20)
+    study.optimize(objective, n_trials=50)
 
     # Get the best hyperparameters
     best_hyperparams = study.best_params
@@ -453,13 +455,29 @@ def hyperparam_tuning():
         f.write(f'{best_hyperparams}\n')
 
 
-def get_augmentation():
-    augmentation = A.Compose([
-    A.HorizontalFlip(p=0.5),
-    A.VerticalFlip(p=0.5),
-    A.RandomRotate90(p=0.5),
-    A.RandomBrightnessContrast(p=0.2)
-    ])
+def get_augmentation(aug):
+    if aug == 0:
+      return None
+    if aug == 1:
+      augmentation = A.Compose([
+      A.HorizontalFlip(p=0.5),
+      A.VerticalFlip(p=0.5),
+      A.RandomRotate90(p=0.5),
+      A.RandomBrightnessContrast(p=0.2)
+      ])
+    elif aug == 2:
+      augmentation = A.Compose([
+      A.ShiftScaleRotate(shift_limit=0.2, scale_limit=0.2, rotate_limit=30, p=0.5),
+      A.RGBShift(r_shift_limit=25, g_shift_limit=25, b_shift_limit=25, p=0.5),
+      A.RandomBrightnessContrast(brightness_limit=0.3, contrast_limit=0.3, p=0.5),
+      A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
+      ])
+    elif aug == 3:
+      augmentation = A.Compose([
+      A.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+      A.GridDistortion(p=0.5),
+      A.OpticalDistortion(distort_limit=2, shift_limit=0.5, p=0.5)
+      ])
 
     return augmentation
 
@@ -476,15 +494,18 @@ def save_augmentation(path, transformation):
                 f.write(f"{aug_dict['transform']}\n")
 
 
-def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_24", model_path="None"):
+def a_3_pipeline(mode, transform=False, model="unet", ds="dataset_25", model_path="None"):
     global path_to_ds
     global batch_size
     global model_name
     path_to_ds = f"datasets/{ds}"
     model_name = model
-    batch_size = 32 #32
-    learning_rate = 0.005 #0.005
-    num_epochs = 1
+    batch_size = 16 #32
+    learning_rate = 0.001 #0.005
+    num_epochs = 20
+    num_layers = 5
+    dropout_prob = 0.18
+    aug = 1
 
     print("Using GPU...")
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -510,7 +531,7 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_24", model
         os.makedirs(this_run_dir_path)
 
         if transform:
-            transformation = get_augmentation()
+            transformation = get_augmentation(aug)
         else:
             transformation = None
 
@@ -520,7 +541,8 @@ def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_24", model
         train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, transformation, batch_size=batch_size)
 
         if model_name == "baseline":
-            model = PixelClassifier().to(device)
+            model = PixelClassifier(num_layers=num_layers, dropout_prob=dropout_prob).to(device)
+            #model = PixelClassifier().to(device)
         else:
             model = UNet(n_channels=3, n_classes=1, bilinear=True).to(device)
 
