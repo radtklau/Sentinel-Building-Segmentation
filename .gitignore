@@ -6,7 +6,6 @@ building_and_sentinel_data/
 *.pkl
 *.tiff
 datasets/
-models/
 hyperparams/
 *.txt
 *.pth

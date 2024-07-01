@@ -352,13 +352,17 @@ def test_model(model, save_result=True, this_run_dir_path=None, device=None):
         plt.title('labels')
         plt.axis('off')
 
+        path_to_plot = os.path.join(this_run_dir_path, f'labels_berlin.png')
+        plt.imsave(path_to_plot, label_matrix, cmap='gray')
+
         plt.subplot(1, 2, 2)
         plt.imshow(pred_matrix, cmap='gray', vmin=0, vmax=1) 
         plt.title('prediction')
         plt.axis('off')
+        
+        path_to_plot = os.path.join(this_run_dir_path, f'preds_berlin.png')
+        plt.imsave(path_to_plot, pred_matrix, cmap='gray')
 
-        path_to_plot = os.path.join(this_run_dir_path, f'test_data_plot.png')
-        plt.savefig(path_to_plot)
         plt.close()
 
         result_path = os.path.join(this_run_dir_path, "acc_berlin.txt")

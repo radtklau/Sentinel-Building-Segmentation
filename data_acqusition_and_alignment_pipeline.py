@@ -263,12 +263,15 @@ def label_gen(city_name):
 def a_1_pipeline(city_name):
     get_osm_building_data(city_name)
 
-    temporal_extent=["2024-05-21", "2024-05-22"]
+    temporal_extent=["2024-05-19", "2024-05-20"]
     bands=["B04", "B03", "B02", "B08"]
     get_sentinel_image_data(temporal_extent, bands, city_name)
 
     label_gen(city_name)
 
-city_name = "Flensburg"
+city_name = "Zagreb"
 a_1_pipeline(city_name)
 #plot_data(city_name, "buildings")
+#from pyrosm.data import sources
+
+#print(sources.cities.available)

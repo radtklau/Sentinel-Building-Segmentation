@@ -188,7 +188,7 @@ def a_2_pipeline(city_names):
     build_final_arrays(label_arrays, feature_arrays) 
 
 global city_names
-city_names = ["Berlin", "Denver", "Wien", "Helsinki",
+city_names = ["Zagreb", "Denver", "Wien", "Helsinki",
                "Hamm", "Flensburg", "Oslo", "Stockholm", 
                "Marseille", "Glasgow"]
 a_2_pipeline(city_names)
