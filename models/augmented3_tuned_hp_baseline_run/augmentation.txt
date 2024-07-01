@@ -1,0 +1,7 @@
+Applied augmentations:
+Augmentation 1:
+{'__class_fullname__': 'ElasticTransform', 'always_apply': False, 'p': 0.5, 'alpha': 120, 'sigma': 6.0, 'alpha_affine': 3.5999999999999996, 'interpolation': 1, 'border_mode': 4, 'value': None, 'mask_value': None, 'approximate': False, 'same_dxdy': False}
+Augmentation 2:
+{'__class_fullname__': 'GridDistortion', 'always_apply': False, 'p': 0.5, 'num_steps': 5, 'distort_limit': (-0.3, 0.3), 'interpolation': 1, 'border_mode': 4, 'value': None, 'mask_value': None, 'normalized': False}
+Augmentation 3:
+{'__class_fullname__': 'OpticalDistortion', 'always_apply': False, 'p': 0.5, 'distort_limit': (-2, 2), 'shift_limit': (-0.5, 0.5), 'interpolation': 1, 'border_mode': 4, 'value': None, 'mask_value': None}

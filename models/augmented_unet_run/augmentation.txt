@@ -1,0 +1,9 @@
+Applied augmentations:
+Augmentation 1:
+{'__class_fullname__': 'HorizontalFlip', 'always_apply': False, 'p': 0.5}
+Augmentation 2:
+{'__class_fullname__': 'VerticalFlip', 'always_apply': False, 'p': 0.5}
+Augmentation 3:
+{'__class_fullname__': 'RandomRotate90', 'always_apply': False, 'p': 0.5}
+Augmentation 4:
+{'__class_fullname__': 'RandomBrightnessContrast', 'always_apply': False, 'p': 0.2, 'brightness_limit': (-0.2, 0.2), 'contrast_limit': (-0.2, 0.2), 'brightness_by_max': True}

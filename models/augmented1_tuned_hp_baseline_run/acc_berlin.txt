@@ -1,0 +1,2 @@
+Accuracy on test image:
+Accuracy: 0.7758635159954421

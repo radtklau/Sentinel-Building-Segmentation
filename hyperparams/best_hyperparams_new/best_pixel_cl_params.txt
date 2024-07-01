@@ -1,0 +1,2 @@
+Best hyperparams for pixel classifier:
+{'learning_rate': 0.0012421834912060038, 'batch_size': 16, 'num_layers': 5, 'dropout_prob': 0.1883485596995974}

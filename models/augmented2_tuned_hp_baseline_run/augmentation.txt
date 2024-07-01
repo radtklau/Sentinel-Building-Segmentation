@@ -1,0 +1,9 @@
+Applied augmentations:
+Augmentation 1:
+{'__class_fullname__': 'ShiftScaleRotate', 'always_apply': False, 'p': 0.5, 'shift_limit_x': (-0.2, 0.2), 'shift_limit_y': (-0.2, 0.2), 'scale_limit': (-0.19999999999999996, 0.19999999999999996), 'rotate_limit': (-30, 30), 'interpolation': 1, 'border_mode': 4, 'value': None, 'mask_value': None, 'rotate_method': 'largest_box'}
+Augmentation 2:
+{'__class_fullname__': 'RGBShift', 'always_apply': False, 'p': 0.5, 'r_shift_limit': (-25, 25), 'g_shift_limit': (-25, 25), 'b_shift_limit': (-25, 25)}
+Augmentation 3:
+{'__class_fullname__': 'RandomBrightnessContrast', 'always_apply': False, 'p': 0.5, 'brightness_limit': (-0.3, 0.3), 'contrast_limit': (-0.3, 0.3), 'brightness_by_max': True}
+Augmentation 4:
+{'__class_fullname__': 'Normalize', 'always_apply': False, 'p': 1.0, 'mean': (0.485, 0.456, 0.406), 'std': (0.229, 0.224, 0.225), 'max_pixel_value': 255.0}

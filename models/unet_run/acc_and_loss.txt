@@ -1,0 +1,3 @@
+Loss and accuracy on test data:
+Loss: 0.008956522680819035
+Accuracy: 0.9018520541958042

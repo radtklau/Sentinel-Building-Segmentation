@@ -2,10 +2,7 @@ city_osm_data/
 *.shp
 *.tiff
 building_and_sentinel_data/
-*.png
+dolphin.png
 *.pkl
 *.tiff
 datasets/
-hyperparams/
-*.txt
-*.pth
