@@ -94,7 +94,7 @@ def get_city_boundary(fp, city_name): #BUG extracts airport for Perth
     return city_boundary
 
 def plot_data(city_name, type): #plot relevant data
-    if type not in ["rgb", "irb", "buildings", "rgb_buildings", "r", "g", "b", "vnir", "stacked"]:
+    if type not in ["rgb", "igb", "buildings", "rgb_buildings", "r", "g", "b", "vnir", "stacked"]:
         print("Not a valid type.")
         return
     
@@ -156,10 +156,10 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     vnir_band_clipped_norm = (np.clip(vnir_band, 0, 2500).astype(np.float64) / 2500) * 255
 
     rgb_im = np.stack([r_band_clipped_norm, g_band_clipped_norm, b_band_clipped_norm], axis=-1)
-    irb_im = np.stack([vnir_band_clipped_norm, g_band_clipped_norm, b_band_clipped_norm], axis=-1)
+    igb_im = np.stack([vnir_band_clipped_norm, g_band_clipped_norm, b_band_clipped_norm], axis=-1)
 
     rgb_im = rgb_im.astype(np.uint8)
-    irb_im = irb_im.astype(np.uint8)
+    igb_im = igb_im.astype(np.uint8)
     r_im = r_band_clipped_norm.astype(np.uint8)
     g_im = g_band_clipped_norm.astype(np.uint8)
     b_im = b_band_clipped_norm.astype(np.uint8)
@@ -170,14 +170,14 @@ def get_sentinel_image_data(temporal_extent, bands, city_name):
     satellite_data_r_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_r.png")
     satellite_data_g_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_g.png")
     satellite_data_b_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_b.png")
-    satellite_data_irb_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_irb.png")
+    satellite_data_igb_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_igb.png")
     satellite_data_vnir_fp = os.path.join(building_and_sentinel_city_data_dir_name, f"{city_name}_vnir.png")
 
     plt.imsave(satellite_data_rgb_fp, rgb_im)
     plt.imsave(satellite_data_r_fp, r_im, cmap='gray')
     plt.imsave(satellite_data_g_fp, g_im, cmap='gray')
     plt.imsave(satellite_data_b_fp, b_im, cmap='gray')
-    plt.imsave(satellite_data_irb_fp, irb_im)
+    plt.imsave(satellite_data_igb_fp, igb_im)
     plt.imsave(satellite_data_vnir_fp, vnir_im, cmap='gray')
 
 
