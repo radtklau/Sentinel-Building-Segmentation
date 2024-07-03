@@ -561,7 +561,7 @@ def a_3_pipeline(mode, transform=False, model="unet", ds="dataset_25", model_pat
 
     elif mode == "test":
         #model_path = "models/run_3/baseline_ds9_ep10_lr0.005_bs32_2024-06-22_21-25-37.pth"
-        test_model(model_path)
+        test_model(model_path) #TODO update passed arguments
     else: #hyperparam tuning
         hyperparam_tuning()
 
