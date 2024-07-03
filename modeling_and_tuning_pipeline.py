@@ -74,16 +74,16 @@ class PixelClassifier(nn.Module):
 """
 
 class PixelClassifier(nn.Module):
-    def __init__(self, in_channels=3, out_channels=1, num_layers=4, base_channels=32, dropout_prob=0.5):
+    def __init__(self, in_channels=3, out_channels=1, num_stages=4, base_channels=32, dropout_prob=0.5):
         super(PixelClassifier, self).__init__()
-        self.num_layers = num_layers
+        self.num_stages = num_stages
         self.in_channels = in_channels
         self.out_channels = out_channels
 
         self.conv_layers = nn.ModuleList()
         self.dropout_layers = nn.ModuleList()
 
-        for layer_idx in range(num_layers):
+        for layer_idx in range(num_stages):
             if layer_idx == 0:
                 self.conv_layers.append(nn.Conv2d(in_channels, base_channels, kernel_size=3, padding=1))
             else:
@@ -92,19 +92,19 @@ class PixelClassifier(nn.Module):
                                                   kernel_size=3, padding=1))
 
             # Add dropout layer after each convolutional layer (except the last one)
-            if layer_idx < num_layers - 1:
+            if layer_idx < num_stages - 1:
                 self.dropout_layers.append(nn.Dropout2d(p=dropout_prob))
 
-        self.conv_out = nn.Conv2d(base_channels * (2**(num_layers-1)), out_channels, kernel_size=1)
+        self.conv_out = nn.Conv2d(base_channels * (2**(num_stages-1)), out_channels, kernel_size=1)
 
     def forward(self, x):
         # Forward pass through convolutional layers
-        for layer_idx in range(self.num_layers):
+        for layer_idx in range(self.num_stages):
             x = self.conv_layers[layer_idx](x)
             x = F.relu(x)
 
             # Apply dropout after each convolutional layer (except the last one)
-            if layer_idx < self.num_layers - 1:
+            if layer_idx < self.num_stages - 1:
                 x = self.dropout_layers[layer_idx](x)
 
         x = self.conv_out(x)
@@ -390,7 +390,7 @@ def objective(trial):
     #hidden_dim = trial.suggest_int('hidden_dim', 16, 256, log=True)
     learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-1, log=True)
     batch_size = trial.suggest_categorical('batch_size', [16, 32, 64])
-    num_layers = trial.suggest_int('num_layers', 1, 6)
+    num_stages = trial.suggest_int('num_stages', 1, 6)
     #num_epochs = trial.suggest_int('num_epochs', 5, 20)
     dropout_prob = trial.suggest_float('dropout_prob', 0, 1)
 
@@ -398,7 +398,7 @@ def objective(trial):
     train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, batch_size=batch_size)
 
     # Initialize model and optimizer
-    model = PixelClassifier(in_channels=3, out_channels=1, num_layers=num_layers, base_channels=32, dropout_prob=dropout_prob)
+    model = PixelClassifier(in_channels=3, out_channels=1, num_stages=num_stages, base_channels=32, dropout_prob=dropout_prob)
     model.to(device)  # Move the model to the device
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.BCELoss().to(device)
@@ -407,7 +407,7 @@ def objective(trial):
 
     loss, acc = evaluate_model(trained_model, val_loader, criterion, device=device) #eval model on val data
     global logger
-    logger.info(f"Trial {trial.number}: learning_rate={learning_rate}, batch_size={batch_size}, num_layers={num_layers}, dropout_prob={dropout_prob}, accuracy={acc}")
+    logger.info(f"Trial {trial.number}: learning_rate={learning_rate}, batch_size={batch_size}, num_stages={num_stages}, dropout_prob={dropout_prob}, accuracy={acc}")
     # Report validation accuracy as the objective to minimize (negative of accuracy for maximize)
     return acc
 
@@ -503,7 +503,7 @@ def a_3_pipeline(mode, transform=False, model="unet", ds="dataset_25", model_pat
     batch_size = 16 #32
     learning_rate = 0.001 #0.005
     num_epochs = 20
-    num_layers = 5
+    num_stages = 5
     dropout_prob = 0.18
     aug = 1
 
@@ -541,7 +541,7 @@ def a_3_pipeline(mode, transform=False, model="unet", ds="dataset_25", model_pat
         train_loader, val_loader, test_loader = get_dataloaders(path_to_ds, transformation, batch_size=batch_size)
 
         if model_name == "baseline":
-            model = PixelClassifier(num_layers=num_layers, dropout_prob=dropout_prob).to(device)
+            model = PixelClassifier(num_stages=num_stages, dropout_prob=dropout_prob).to(device)
             #model = PixelClassifier().to(device)
         else:
             model = UNet(n_channels=3, n_classes=1, bilinear=True).to(device)
