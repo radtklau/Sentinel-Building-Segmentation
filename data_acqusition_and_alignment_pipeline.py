@@ -190,6 +190,7 @@ def build_stacked_im(city_name, label_im, rgb_im):
     path_to_stacked_image = os.path.join(path_to_city_data, f"{city_name}_stacked.png")
     plt.imsave(path_to_stacked_image, stacked_im)
 
+    #TODO move following part to end of label_gen()
     buildings_im = np.zeros((rgb_im.shape[0], rgb_im.shape[1], 4), dtype=np.uint8)
     buildings_im[mask, 3] = 255
     buildings_im[mask, :3] = [0, 0, 255]
