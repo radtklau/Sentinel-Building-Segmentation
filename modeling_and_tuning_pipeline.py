@@ -494,7 +494,7 @@ def save_augmentation(path, transformation):
                 f.write(f"{aug_dict['transform']}\n")
 
 
-def a_3_pipeline(mode, transform=False, model="unet", ds="dataset_25", model_path="None"):
+def a_3_pipeline(mode, transform=False, model="baseline", ds="dataset_25", model_path="None"):
     global path_to_ds
     global batch_size
     global model_name
@@ -566,5 +566,5 @@ def a_3_pipeline(mode, transform=False, model="unet", ds="dataset_25", model_pat
         hyperparam_tuning()
 
 global model_name
-#a_3_pipeline(mode="train", transform=True)
-a_3_pipeline(mode="tune")
+a_3_pipeline(mode="train", transform=False)
+#a_3_pipeline(mode="tune")
